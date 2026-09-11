@@ -1,0 +1,168 @@
+---
+import type { DistrictRollup } from "../lib/types";
+
+interface Props {
+  data: DistrictRollup[];
+  height?: number;
+  showTemp?: boolean;
+  showRain?: boolean;
+}
+const {
+  data,
+  height = 280,
+  showTemp = true,
+  showRain = false,
+} = Astro.props as Props;
+const width = 720;
+const pad = { top: 16, right: 48, bottom: 28, left: 40 };
+const innerW = width - pad.left - pad.right;
+const innerH = height - pad.top - pad.bottom;
+
+const points = data.filter((d) => d.avg_aqi != null);
+const aqiVals = points.map((d) => d.avg_aqi!);
+const maxAqi = Math.max(500, ...aqiVals);
+const minAqi = 0;
+const minDate = points[0]?.date ?? "2025-01-01";
+const maxDate = points[points.length - 1]?.date ?? "2026-08-31";
+
+function xFor(d: string) {
+  if (points.length <= 1) return pad.left;
+  const t =
+    (new Date(d).getTime() - new Date(minDate).getTime()) /
+    (new Date(maxDate).getTime() - new Date(minDate).getTime() || 1);
+  return pad.left + t * innerW;
+}
+function yForAqi(v: number) {
+  return pad.top + (1 - (v - minAqi) / (maxAqi - minAqi)) * innerH;
+}
+
+const linePath = points
+  .map((d, i) => `${i === 0 ? "M" : "L"} ${xFor(d.date)} ${yForAqi(d.avg_aqi!)}`)
+  .join(" ");
+const areaPath =
+  points.length > 0
+    ? `${linePath} L ${xFor(points[points.length - 1].date)} ${pad.top + innerH} L ${xFor(points[0].date)} ${pad.top + innerH} Z`
+    : "";
+
+const tempPath = points
+  .map((d, i) => {
+    if (d.avg_temp == null) return null;
+    const temps = points.map((p) => p.avg_temp ?? 0);
+    const tMax = Math.max(40, ...temps);
+    const tMin = Math.min(0, ...temps);
+    const y =
+      pad.top + (1 - (d.avg_temp - tMin) / (tMax - tMin || 1)) * innerH;
+    return `${i === 0 ? "M" : "L"} ${xFor(d.date)} ${y}`;
+  })
+  .filter(Boolean)
+  .join(" ");
+
+const rainBars = showRain
+  ? points
+      .map((d) => {
+        if (d.avg_rainfall == null) return null;
+        const rains = points.map((p) => p.avg_rainfall ?? 0);
+        const rMax = Math.max(10, ...rains);
+        const barH = (d.avg_rainfall / rMax) * (innerH * 0.3);
+        return `<rect x="${xFor(d.date) - 1}" y="${pad.top + innerH - barH}" width="2" height="${barH}" fill="var(--color-accent-teal)" opacity="0.5" />`;
+      })
+      .filter(Boolean)
+      .join("")
+  : "";
+
+// Y axis grid lines and labels
+const yTicks = [0, 100, 200, 300, 400, 500];
+const yLines = yTicks
+  .map((t) => {
+    const y = yForAqi(t);
+    return `<line x1="${pad.left}" y1="${y}" x2="${pad.left + innerW}" y2="${y}" stroke="var(--color-hairline-soft)" stroke-dasharray="2 4" /><text x="${pad.left - 6}" y="${y + 3}" text-anchor="end" class="chart-axis-label">${t}</text>`;
+  })
+  .join("");
+
+// X axis labels — pick ~5 evenly spaced
+const xLabels = (() => {
+  if (points.length === 0) return "";
+  const step = Math.max(1, Math.floor(points.length / 5));
+  let out = "";
+  for (let i = 0; i < points.length; i += step) {
+    const d = points[i];
+    const x = xFor(d.date);
+    out += `<text x="${x}" y="${pad.top + innerH + 18}" text-anchor="middle" class="chart-axis-label">${d.date.slice(5)}</text>`;
+  }
+  return out;
+})();
+---
+
+<svg
+  viewBox={`0 0 ${width} ${height}`}
+  width="100%"
+  height={height}
+  role="img"
+  aria-label="AQI history chart"
+>
+  <g class="chart-grid" set:html={yLines}></g>
+  <g set:html={rainBars}></g>
+  <path
+    d={areaPath}
+    fill="var(--color-primary)"
+    class="chart-area"
+    aria-hidden="true"
+  ></path>
+  <path
+    d={linePath}
+    fill="none"
+    stroke="var(--color-primary)"
+    stroke-width="2.5"
+    stroke-linejoin="round"
+    stroke-linecap="round"
+  ></path>
+  {
+    showTemp && tempPath && (
+      <path
+        d={tempPath}
+        fill="none"
+        stroke="var(--color-accent-amber)"
+        stroke-width="2"
+        stroke-dasharray="3 3"
+        stroke-linejoin="round"
+        stroke-linecap="round"
+      />
+    )
+  }
+  <g set:html={xLabels}></g>
+</svg>
+
+{
+  showTemp && (
+    <div class="flex flex-wrap gap-3 mt-2 text-sm text-muted">
+      <span class="inline-flex items-center gap-2">
+        <span
+          class="inline-block w-3 h-0.5"
+          style="background:var(--color-primary);"
+          aria-hidden="true"
+        ></span>
+        AQI
+      </span>
+      <span class="inline-flex items-center gap-2">
+        <span
+          class="inline-block w-3 h-0.5"
+          style="background:var(--color-accent-amber); border-top: 2px dashed var(--color-accent-amber); background:transparent;"
+          aria-hidden="true"
+        ></span>
+        Temperature
+      </span>
+      {
+        showRain && (
+          <span class="inline-flex items-center gap-2">
+            <span
+              class="inline-block w-3 h-3"
+              style="background:var(--color-accent-teal); opacity:0.6;"
+              aria-hidden="true"
+            />
+            Rainfall
+          </span>
+        )
+      }
+    </div>
+  )
+}

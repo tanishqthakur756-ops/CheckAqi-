@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>India AQI-Weather Tracker</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  :root { --bg:#0f1115; --card:#171a21; --border:#2a2e38; --text:#e8e9ec; --muted:#9aa0ac; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:-apple-system,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--text); }
+  header { padding:18px 24px; border-bottom:1px solid var(--border); }
+  header h1 { margin:0; font-size:20px; }
+  header p { margin:4px 0 0; color:var(--muted); font-size:13px; }
+  .layout { display:grid; gap:16px; padding:20px; max-width:1100px; margin:0 auto; }
+  #map { height:360px; border-radius:12px; border:1px solid var(--border); }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:18px; }
+  .card h2 { margin:0 0 12px; font-size:15px; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:.04em; }
+  .aqi-hero { display:flex; align-items:baseline; gap:14px; }
+  .aqi-number { font-size:48px; font-weight:700; }
+  .aqi-cat { font-size:16px; padding:4px 12px; border-radius:20px; font-weight:600; }
+  select { background:var(--card); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:8px 12px; font-size:14px; }
+  .badges { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+  .badge { font-size:11px; padding:3px 10px; border-radius:12px; border:1px solid var(--border); color:var(--muted); }
+  .badge.verified { color:#6fcf97; border-color:#6fcf97; }
+  .badge.estimated { color:#f2c94c; border-color:#f2c94c; }
+  .badge.no_data { color:#eb5757; border-color:#eb5757; }
+  .seasons-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+  .season-box { background:#1e222c; border-radius:8px; padding:12px; text-align:center; }
+  .season-box .label { font-size:12px; color:var(--muted); text-transform:capitalize; }
+  .season-box .val { font-size:22px; font-weight:700; margin-top:4px; }
+  .season-box .days { font-size:10px; color:var(--muted); margin-top:2px; }
+  .corr-line { display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--border); font-size:14px; }
+  .corr-line:last-child { border-bottom:none; }
+  canvas { max-height:280px; }
+  footer { text-align:center; color:var(--muted); font-size:12px; padding:20px; }
+  .top-row { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; }
+  .empty-note { color:var(--muted); font-size:13px; padding: 20px 0; text-align:center; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>India AQI &amp; Weather Tracker</h1>
+  <p>Tracking how pollution rises and falls with the seasons, district by district.</p>
+</header>
+
+<div class="layout">
+  <div id="map"></div>
+
+  <div class="card">
+    <div class="top-row">
+      <div>
+        <h2 id="district-name">Loading...</h2>
+        <div class="aqi-hero">
+          <span class="aqi-number" id="aqi-value">--</span>
+          <span class="aqi-cat" id="aqi-category">--</span>
+        </div>
+      </div>
+      <select id="district-select"></select>
+    </div>
+    <div class="badges" id="badges"></div>
+  </div>
+
+  <div class="card">
+    <h2>AQI vs Temperature &amp; Rainfall</h2>
+    <div class="top-row" style="margin-bottom:10px;">
+      <span></span>
+      <select id="range-select">
+        <option value="30d">Last 30 days</option>
+        <option value="90d">Last 90 days</option>
+        <option value="1y" selected>Last year</option>
+      </select>
+    </div>
+    <canvas id="history-chart"></canvas>
+    <div id="history-empty" class="empty-note" style="display:none;">No historical data for this district yet.</div>
+  </div>
+
+  <div class="card">
+    <h2>Seasonal Pattern (avg AQI, up to 3 years)</h2>
+    <div class="seasons-grid" id="seasons-grid"></div>
+  </div>
+
+  <div class="card">
+    <h2>Weather Correlation</h2>
+    <div id="correlations"></div>
+  </div>
+</div>
+
+<footer id="source-footer">Loading source info...</footer>
+
+<script>
+// Empty string = same origin. This file is served BY the FastAPI app itself
+// (mounted at "/" in main.py), so this works out of the box. Only change
+// this if you're serving the frontend from a different host/port.
+const API = "";
+
+let map, historyChart;
+const markers = {};
+
+const AQI_COLORS = {
+  "Good":"#00B050","Satisfactory":"#92D050","Moderate":"#FFFF00",
+  "Poor":"#FF9900","Very Poor":"#FF0000","Severe":"#C00000","Unknown":"#9E9E9E"
+};
+
+function catFromAqi(aqi) {
+  if (aqi == null) return "Unknown";
+  if (aqi <= 50) return "Good";
+  if (aqi <= 100) return "Satisfactory";
+  if (aqi <= 200) return "Moderate";
+  if (aqi <= 300) return "Poor";
+  if (aqi <= 400) return "Very Poor";
+  return "Severe";
+}
+
+function describeCorrelation(r) {
+  if (r === null || r === undefined) return "Not enough data yet";
+  const abs = Math.abs(r);
+  let strength;
+  if (abs < 0.1) strength = "negligible";
+  else if (abs < 0.3) strength = "weak";
+  else if (abs < 0.5) strength = "moderate";
+  else if (abs < 0.7) strength = "moderately strong";
+  else strength = "strong";
+  const direction = r < 0 ? "inverse" : "positive";
+  return `${strength} ${direction} relationship (r = ${r})`;
+}
+
+async function getJSON(path) {
+  const res = await fetch(`${API}${path}`);
+  if (!res.ok) throw new Error(`${path} -> ${res.status}`);
+  return res.json();
+}
+
+async function init() {
+  map = L.map('map').setView([22.5, 79], 5);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors', maxZoom: 8
+  }).addTo(map);
+
+  // NOTE: the real API serves ~200 seeded districts, most with no station
+  // data yet (only 12 sample stations exist). Districts with no reading
+  // show latest_aqi: null and render as grey "No Data" markers -- this is
+  // intentional (Approach A: honest coverage), not a bug.
+  const districts = await getJSON('/api/districts/');
+
+  const select = document.getElementById('district-select');
+  const withData = districts.filter(d => d.latest_aqi != null);
+  const withoutData = districts.filter(d => d.latest_aqi == null);
+  // Show districts with real data first in the dropdown
+  [...withData, ...withoutData].forEach(d => {
+    const opt = document.createElement('option');
+    opt.value = d.district_id;
+    opt.textContent = d.latest_aqi != null
+      ? `${d.name}, ${d.state} (AQI ${Math.round(d.latest_aqi)})`
+      : `${d.name}, ${d.state} (no data)`;
+    select.appendChild(opt);
+  });
+
+  districts.forEach(d => {
+    if (d.latitude == null || d.longitude == null) return;
+    const cat = catFromAqi(d.latest_aqi);
+    const marker = L.circleMarker([d.latitude, d.longitude], {
+      radius: d.latest_aqi != null ? 8 : 4,
+      fillColor: AQI_COLORS[cat], color: "#000", weight: 1,
+      fillOpacity: d.latest_aqi != null ? 0.85 : 0.4
+    }).addTo(map);
+    marker.bindTooltip(`${d.name}: ${d.latest_aqi != null ? 'AQI ' + Math.round(d.latest_aqi) + ' (' + cat + ')' : 'No data'}`);
+    marker.on('click', () => { select.value = d.district_id; loadDistrict(d.district_id); });
+  });
+
+  select.addEventListener('change', e => loadDistrict(e.target.value));
+  document.getElementById('range-select').addEventListener('change', () => loadDistrict(select.value));
+
+  const firstWithData = withData[0] || districts[0];
+  if (firstWithData) {
+    select.value = firstWithData.district_id;
+    loadDistrict(firstWithData.district_id);
+  }
+
+  try {
+    const sources = await getJSON('/api/sources/');
+    document.getElementById('source-footer').textContent = sources.length
+      ? "Source: " + sources.map(s => s.source_name).join(', ') +
+        " · Synced: " + (sources[0]?.last_synced_at ?? "unknown")
+      : "No source metadata recorded yet.";
+  } catch (e) {
+    document.getElementById('source-footer').textContent = "Could not load source info.";
+  }
+}
+
+async function loadDistrict(districtId) {
+  const detail = await getJSON(`/api/districts/${districtId}`);
+  document.getElementById('district-name').textContent = detail.meta.name;
+
+  const badgeHtml = [`<span class="badge">${detail.active_station_count} active station(s)</span>`];
+  document.getElementById('badges').innerHTML = badgeHtml.join('');
+
+  const range = document.getElementById('range-select').value;
+  const history = await getJSON(`/api/districts/${districtId}/history?range=${range}`);
+
+  const latest = history.data.length ? history.data[history.data.length - 1] : null;
+  const cat = catFromAqi(latest ? latest.avg_aqi : null);
+  document.getElementById('aqi-value').textContent = latest && latest.avg_aqi != null ? Math.round(latest.avg_aqi) : "N/A";
+  const catEl = document.getElementById('aqi-category');
+  catEl.textContent = cat;
+  catEl.style.background = AQI_COLORS[cat] + "33";
+  catEl.style.color = AQI_COLORS[cat];
+
+  if (latest) {
+    const covBadge = document.createElement('span');
+    covBadge.className = `badge ${latest.coverage_type === 'station' ? 'verified' : latest.coverage_type === 'interpolated' ? 'estimated' : 'no_data'}`;
+    covBadge.textContent = latest.coverage_type === 'station' ? 'Station Verified'
+                          : latest.coverage_type === 'interpolated' ? 'Estimated' : 'No Data';
+    document.getElementById('badges').appendChild(covBadge);
+  }
+
+  renderHistoryChart(history.data);
+
+  const correlation = await getJSON(`/api/districts/${districtId}/correlation`);
+  renderSeasons(correlation.seasonal_pattern);
+  renderCorrelations(correlation);
+}
+
+function renderHistoryChart(data) {
+  const emptyEl = document.getElementById('history-empty');
+  const canvasEl = document.getElementById('history-chart');
+  if (!data.length) {
+    emptyEl.style.display = 'block';
+    canvasEl.style.display = 'none';
+    if (historyChart) { historyChart.destroy(); historyChart = null; }
+    return;
+  }
+  emptyEl.style.display = 'none';
+  canvasEl.style.display = 'block';
+
+  const labels = data.map(d => d.date);
+  const aqi = data.map(d => d.avg_aqi);
+  const temp = data.map(d => d.avg_temp);
+
+  if (historyChart) historyChart.destroy();
+  const ctx = canvasEl.getContext('2d');
+  historyChart = new Chart(ctx, {
+    type: 'line',
+    data: { labels, datasets: [
+      { label:'AQI', data:aqi, borderColor:'#FF6B6B', yAxisID:'y', pointRadius:0, tension:0.2 },
+      { label:'Temp (°C)', data:temp, borderColor:'#4DA6FF', yAxisID:'y1', pointRadius:0, tension:0.2 },
+    ]},
+    options: {
+      responsive: true,
+      interaction: { mode:'index', intersect:false },
+      scales: {
+        y: { position:'left', title:{display:true,text:'AQI'}, grid:{color:'#2a2e38'} },
+        y1: { position:'right', title:{display:true,text:'°C'}, grid:{display:false} },
+        x: { ticks:{maxTicksLimit:8}, grid:{color:'#2a2e38'} },
+      },
+      plugins: { legend: { labels: { color: '#e8e9ec' } } }
+    }
+  });
+}
+
+function renderSeasons(seasonal) {
+  const order = ["winter","summer","monsoon","post_monsoon"];
+  const grid = document.getElementById('seasons-grid');
+  if (!seasonal) {
+    grid.innerHTML = `<div class="empty-note" style="grid-column: 1 / -1;">No seasonal data yet -- needs history across at least one full season.</div>`;
+    return;
+  }
+  grid.innerHTML = order.map(season => {
+    const val = seasonal[season];
+    return `<div class="season-box">
+      <div class="label">${season.replace('_','-')}</div>
+      <div class="val" style="color:${AQI_COLORS[catFromAqi(val)]}">${val ?? '--'}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderCorrelations(corr) {
+  const box = document.getElementById('correlations');
+  box.innerHTML = `
+    <div class="corr-line"><span>Wind (ventilation effect)</span><span>${describeCorrelation(corr.wind_correlation)}</span></div>
+    <div class="corr-line"><span>Rainfall (washout effect)</span><span>${describeCorrelation(corr.rainfall_correlation)}</span></div>
+  `;
+}
+
+init().catch(err => {
+  document.body.insertAdjacentHTML('afterbegin',
+    `<div style="background:#c0392b;color:white;padding:12px;text-align:center;">
+       Could not reach the API at ${API}. Is the FastAPI server running?
+       (${err.message})
+     </div>`);
+});
+</script>
+</body>
+</html>

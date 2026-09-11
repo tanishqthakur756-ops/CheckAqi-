@@ -1,0 +1,36 @@
+---
+interface Props {
+  aqi: number | null;
+  /** e.g. "Station verified", "Estimated", "No data" */
+  label: string;
+  variant?: "verified" | "estimated" | "no-data";
+  class?: string;
+}
+const { aqi, label, variant = "verified", class: className = "" } =
+  Astro.props as Props;
+const ring =
+  variant === "verified"
+    ? "var(--color-success)"
+    : variant === "estimated"
+      ? "var(--color-warning)"
+      : "var(--color-error)";
+const dotBg = ring;
+---
+
+<div
+  class={`inline-flex items-center gap-2 px-3 py-1.5 rounded-pill ${className}`}
+  style={`border: 1px solid ${ring}; background: color-mix(in oklab, ${ring} 12%, transparent);`}
+  aria-label={`${label}: AQI ${aqi == null ? "unavailable" : Math.round(aqi)}`}
+>
+  <span
+    class="inline-block w-2 h-2 rounded-full"
+    style={`background:${dotBg};`}
+    aria-hidden="true"
+  ></span>
+  <span class="text-sm" style={`color:${ring}; font-weight:500;`}>
+    {label}
+  </span>
+  <span class="text-sm text-muted">
+    · AQI {aqi == null ? "—" : Math.round(aqi)}
+  </span>
+</div>

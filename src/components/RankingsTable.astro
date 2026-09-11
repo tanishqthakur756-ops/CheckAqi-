@@ -1,0 +1,138 @@
+---
+/**
+ * City Rankings Leaderboard Component (Most Polluted vs Cleanest Cities)
+ *
+ * Displays ranked leaderboards inspired by AQI.in rankings page.
+ */
+import type { DistrictListItem } from "../lib/types";
+import { categoryFromAqi, categoryColor, categoryBg } from "../lib/aqi";
+
+interface Props {
+  districts: DistrictListItem[];
+}
+
+const { districts } = Astro.props as Props;
+
+const valid = districts.filter((d) => d.latest_aqi != null);
+const sortedDesc = [...valid].sort((a, b) => b.latest_aqi! - a.latest_aqi!);
+const sortedAsc = [...valid].sort((a, b) => a.latest_aqi! - b.latest_aqi!);
+
+const mostPolluted = sortedDesc.slice(0, 8);
+const cleanest = sortedAsc.slice(0, 8);
+---
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6" data-rankings-table>
+  <!-- Top Most Polluted -->
+  <div class="card-canvas p-6 flex flex-col gap-4">
+    <div class="flex items-center justify-between border-b hairline pb-3">
+      <div>
+        <span class="badge badge-coral mb-1">Live Leaderboard</span>
+        <h3 class="display-sm" style="font-size:22px;">Most Polluted Cities Today</h3>
+      </div>
+      <span class="text-xs font-mono text-muted">Worst Air #1-#8</span>
+    </div>
+
+    <div class="flex flex-col gap-2">
+      {
+        mostPolluted.map((d, i) => {
+          const cat = categoryFromAqi(d.latest_aqi);
+          const color = categoryColor(cat);
+          const bg = categoryBg(cat);
+
+          return (
+            <a
+              href={`/districts/${d.district_id}`}
+              class="flex items-center justify-between p-3 rounded-lg bg-surface-soft hover:bg-surface-card border hairline-soft transition-colors no-underline"
+            >
+              <div class="flex items-center gap-3">
+                <span class="w-6 text-center font-mono text-xs font-bold text-muted">
+                  #{i + 1}
+                </span>
+                <div>
+                  <div class="text-sm font-medium text-ink flex items-center gap-1.5">
+                    <span>{d.name}</span>
+                    {d.coverage_type === "predicted" && (
+                      <span class="text-[9px] px-1 py-0.2 rounded bg-primary/10 text-primary border border-primary/20">
+                        Predicted
+                      </span>
+                    )}
+                  </div>
+                  <div class="text-xs text-muted-soft">{d.state}</div>
+                </div>
+              </div>
+
+              <div class="flex items-center gap-2">
+                <span class="display-sm font-semibold" style={`font-size:20px; color:${color};`}>
+                  {Math.round(d.latest_aqi!)}
+                </span>
+                <span
+                  class="badge text-[10px] px-2 py-0.5"
+                  style={`color:${cat === "Very Poor" || cat === "Severe" ? "#fff" : color}; background:${bg};`}
+                >
+                  {cat}
+                </span>
+              </div>
+            </a>
+          );
+        })
+      }
+    </div>
+  </div>
+
+  <!-- Top Cleanest Cities -->
+  <div class="card-canvas p-6 flex flex-col gap-4">
+    <div class="flex items-center justify-between border-b hairline pb-3">
+      <div>
+        <span class="badge badge-muted mb-1">Live Leaderboard</span>
+        <h3 class="display-sm" style="font-size:22px;">Cleanest Air Cities Today</h3>
+      </div>
+      <span class="text-xs font-mono text-muted">Best Air #1-#8</span>
+    </div>
+
+    <div class="flex flex-col gap-2">
+      {
+        cleanest.map((d, i) => {
+          const cat = categoryFromAqi(d.latest_aqi);
+          const color = categoryColor(cat);
+          const bg = categoryBg(cat);
+
+          return (
+            <a
+              href={`/districts/${d.district_id}`}
+              class="flex items-center justify-between p-3 rounded-lg bg-surface-soft hover:bg-surface-card border hairline-soft transition-colors no-underline"
+            >
+              <div class="flex items-center gap-3">
+                <span class="w-6 text-center font-mono text-xs font-bold text-muted">
+                  #{i + 1}
+                </span>
+                <div>
+                  <div class="text-sm font-medium text-ink flex items-center gap-1.5">
+                    <span>{d.name}</span>
+                    {d.coverage_type === "predicted" && (
+                      <span class="text-[9px] px-1 py-0.2 rounded bg-primary/10 text-primary border border-primary/20">
+                        Predicted
+                      </span>
+                    )}
+                  </div>
+                  <div class="text-xs text-muted-soft">{d.state}</div>
+                </div>
+              </div>
+
+              <div class="flex items-center gap-2">
+                <span class="display-sm font-semibold" style={`font-size:20px; color:${color};`}>
+                  {Math.round(d.latest_aqi!)}
+                </span>
+                <span
+                  class="badge text-[10px] px-2 py-0.5"
+                  style={`color:${cat === "Very Poor" || cat === "Severe" ? "#fff" : color}; background:${bg};`}
+                >
+                  {cat}
+                </span>
+              </div>
+            </a>
+          );
+        })
+      }
+    </div>
+  </div>
+</div>

@@ -1,0 +1,322 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import RankingsTable from "../../components/RankingsTable.astro";
+import DistrictComparer from "../../components/DistrictComparer.astro";
+import { loadDistricts } from "../../lib/loaders";
+import { categoryFromAqi, categoryColor, categoryBg } from "../../lib/aqi";
+
+const districts = (await loadDistricts()).data;
+
+const regions: Record<string, string[]> = {
+  North: [
+    "Delhi",
+    "Punjab",
+    "Haryana",
+    "Himachal Pradesh",
+    "Jammu and Kashmir",
+    "Uttarakhand",
+    "Uttar Pradesh",
+    "Rajasthan",
+  ],
+  South: [
+    "Andhra Pradesh",
+    "Karnataka",
+    "Kerala",
+    "Tamil Nadu",
+    "Telangana",
+  ],
+  East: [
+    "Bihar",
+    "Jharkhand",
+    "Odisha",
+    "West Bengal",
+    "Assam",
+  ],
+  West: [
+    "Gujarat",
+    "Madhya Pradesh",
+    "Maharashtra",
+    "Chhattisgarh",
+    "Goa",
+  ],
+};
+
+const groups: { region: string; states: string[]; items: typeof districts }[] = (
+  Object.keys(regions) as (keyof typeof regions)[]
+).map((region) => {
+  const states = regions[region];
+  const items = districts.filter((d) => states.includes(d.state));
+  return { region, states, items };
+});
+
+const total = districts.length;
+const withData = districts.filter((d) => d.latest_aqi != null);
+---
+
+<Layout
+  title="All districts"
+  description="Browse every district in our AQI-Weather network. Filter by region or state, sort by today's air quality."
+>
+  <section class="container-prose section-pad">
+    <div class="max-w-2xl">
+      <span class="badge badge-coral mb-3">{withData.length} of {total} districts live</span>
+      <h1 class="display-lg">Every district, on one page.</h1>
+      <p class="text-body mt-4">
+        The full list, grouped by region. Sort by today's AQI, click any
+        district for the full dashboard.
+      </p>
+    </div>
+
+    <!-- Recent Searches Pill Bar -->
+    <div id="page-recent-searches" class="mt-6 hidden">
+      <div class="text-xs uppercase tracking-widest text-muted mb-2" style="font-weight:500;">
+        Recently Viewed
+      </div>
+      <div id="page-recent-pills" class="flex flex-wrap gap-2"></div>
+    </div>
+
+    <form
+      class="card-canvas mt-6 flex flex-col md:flex-row md:items-end gap-4"
+      role="search"
+    >
+      <div class="flex-1">
+        <label
+          for="filter"
+          class="block text-xs uppercase tracking-widest text-muted mb-2"
+          style="font-weight:500;"
+        >
+          Search District or State
+        </label>
+        <input
+          id="filter"
+          type="search"
+          class="input"
+          placeholder="Filter by name, state, or AQI (e.g. Delhi, Moderate)..."
+          autocomplete="off"
+        />
+      </div>
+      <div>
+        <label
+          for="sort"
+          class="block text-xs uppercase tracking-widest text-muted mb-2"
+          style="font-weight:500;"
+        >
+          Sort
+        </label>
+        <select id="sort" class="input">
+          <option value="aqi-desc">Worst air first</option>
+          <option value="aqi-asc">Best air first</option>
+          <option value="name">By name</option>
+          <option value="state">By state</option>
+        </select>
+      </div>
+      <label class="inline-flex items-center gap-2 text-sm text-body">
+        <input id="only-data" type="checkbox" />
+        Only show districts with data
+      </label>
+    </form>
+  </section>
+
+  <section class="container-prose section-pad" style="padding-top:0;">
+    <RankingsTable districts={districts} />
+  </section>
+
+  <section class="container-prose section-pad" style="padding-top:0;">
+    <DistrictComparer districts={districts} />
+  </section>
+
+  {
+    groups.map((g) => {
+      if (g.items.length === 0) return null;
+      return (
+        <section
+          id={g.region.toLowerCase()}
+          class="container-prose"
+          style="padding-block:32px;"
+        >
+          <div class="flex items-baseline justify-between gap-3 mb-4 flex-wrap">
+            <h2 class="display-md">{g.region} India</h2>
+            <span class="badge badge-muted">
+              {g.items.filter((i) => i.latest_aqi != null).length} live
+            </span>
+          </div>
+          <div
+            class="grid gap-3"
+            style="grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));"
+            data-region-list
+            data-state-list={g.states.join(",")}
+          >
+            {g.items.map((d) => {
+              const cat = categoryFromAqi(d.latest_aqi);
+              const color = categoryColor(cat);
+              const bg = categoryBg(cat);
+              const isPredicted = d.coverage_type === "predicted" || d.is_predicted;
+              return (
+                <a
+                  href={`/districts/${d.district_id}`}
+                  class="block p-4 rounded-lg no-underline group"
+                  style="background:var(--color-canvas); border:1px solid var(--color-hairline-soft); transition: background-color 120ms ease;"
+                  data-district-row
+                  data-id={d.district_id}
+                  data-name={d.name.toLowerCase()}
+                  data-state={d.state.toLowerCase()}
+                  data-aqi={d.latest_aqi ?? ""}
+                  data-cat={cat.toLowerCase()}
+                  onmouseover="this.style.background='var(--color-surface-soft)'"
+                  onmouseout="this.style.background='var(--color-canvas)'"
+                >
+                  <div class="flex items-start justify-between gap-2">
+                    <div>
+                      <div
+                        class="text-sm flex items-center gap-1.5"
+                        style="font-weight:500; color:var(--color-ink);"
+                      >
+                        <span>{d.name}</span>
+                        {isPredicted && (
+                          <span class="text-[10px] px-1.5 py-0.2 rounded bg-primary/10 text-primary border border-primary/20" title="Predicted via Spatial IDW Model">
+                            Predicted
+                          </span>
+                        )}
+                      </div>
+                      <div class="text-xs text-muted mt-0.5">
+                        {d.state}
+                      </div>
+                    </div>
+                    {d.latest_aqi != null ? (
+                      <span
+                        class="badge"
+                        style={`color:${cat === "Very Poor" || cat === "Severe" ? "#fff" : color}; background:${bg}; font-size:10px;`}
+                      >
+                        {Math.round(d.latest_aqi)}
+                      </span>
+                    ) : (
+                      <span
+                        class="badge badge-muted"
+                        style="text-transform:none; letter-spacing:0;"
+                      >
+                        no data
+                      </span>
+                    )}
+                  </div>
+                </a>
+              );
+            })}
+          </div>
+        </section>
+      );
+    })
+  }
+
+  <script>
+    const filter = document.getElementById("filter") as HTMLInputElement | null;
+    const sortSel = document.getElementById("sort") as HTMLSelectElement | null;
+    const onlyData = document.getElementById("only-data") as HTMLInputElement | null;
+    const recentSection = document.getElementById("page-recent-searches");
+    const recentPills = document.getElementById("page-recent-pills");
+
+    const RECENT_KEY = "india_aqi_recent_searches";
+
+    function loadRecentPills() {
+      if (!recentSection || !recentPills) return;
+      try {
+        const recentIds: string[] = JSON.parse(localStorage.getItem(RECENT_KEY) || "[]");
+        if (recentIds.length === 0) {
+          recentSection.classList.add("hidden");
+          return;
+        }
+        recentSection.classList.remove("hidden");
+        recentPills.innerHTML = recentIds
+          .map((id) => {
+            const el = document.querySelector<HTMLElement>(`[data-district-row][data-id="${id}"]`);
+            if (!el) return "";
+            const name = el.dataset.name || "";
+            return `<a href="/districts/${id}" class="px-2.5 py-1 text-xs rounded-full bg-surface-card border hairline text-ink hover:bg-surface-soft no-underline">🕒 ${name}</a>`;
+          })
+          .filter(Boolean)
+          .join("");
+      } catch {
+        recentSection.classList.add("hidden");
+      }
+    }
+
+    function apply() {
+      const term = (filter?.value ?? "").trim().toLowerCase();
+      const sort = sortSel?.value ?? "aqi-desc";
+      const only = onlyData?.checked ?? false;
+
+      document
+        .querySelectorAll<HTMLElement>("[data-region-list]")
+        .forEach((grid) => {
+          const rows = Array.from(
+            grid.querySelectorAll<HTMLElement>("[data-district-row]"),
+          );
+          // Filter
+          const visible = rows.filter((r) => {
+            const name = r.dataset.name ?? "";
+            const state = r.dataset.state ?? "";
+            const aqi = r.dataset.aqi ?? "";
+            const cat = r.dataset.cat ?? "";
+            if (term && !name.includes(term) && !state.includes(term) && !cat.includes(term))
+              return false;
+            if (only && !aqi) return false;
+            return true;
+          });
+          rows.forEach((r) => {
+            r.style.display = visible.includes(r) ? "" : "none";
+          });
+          // Sort
+          visible.sort((a, b) => {
+            const an = a.dataset.name ?? "";
+            const bn = b.dataset.name ?? "";
+            const as = a.dataset.state ?? "";
+            const bs = b.dataset.state ?? "";
+            const aa = a.dataset.aqi ? Number(a.dataset.aqi) : null;
+            const ba = b.dataset.aqi ? Number(b.dataset.aqi) : null;
+            if (sort === "name") return an.localeCompare(bn);
+            if (sort === "state") return as.localeCompare(bs);
+            if (sort === "aqi-asc")
+              return (ba ?? Infinity) - (aa ?? Infinity);
+            return (aa ?? -Infinity) - (ba ?? -Infinity);
+          });
+          visible.forEach((r) => grid.appendChild(r));
+        });
+    }
+
+    filter?.addEventListener("input", apply);
+    filter?.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        const visibleRows = Array.from(document.querySelectorAll<HTMLElement>("[data-district-row]")).filter((r) => r.style.display !== "none");
+        if (visibleRows.length > 0) {
+          const firstHref = visibleRows[0].getAttribute("href");
+          const firstId = visibleRows[0].getAttribute("data-id");
+          if (firstId) {
+            try {
+              const recents: string[] = JSON.parse(localStorage.getItem(RECENT_KEY) || "[]").filter((i: string) => i !== firstId);
+              recents.unshift(firstId);
+              localStorage.setItem(RECENT_KEY, JSON.stringify(recents.slice(0, 5)));
+            } catch {}
+          }
+          if (firstHref) window.location.href = firstHref;
+        }
+      }
+    });
+
+    document.querySelectorAll<HTMLElement>("[data-district-row]").forEach((r) => {
+      r.addEventListener("click", () => {
+        const id = r.getAttribute("data-id");
+        if (id) {
+          try {
+            const recents: string[] = JSON.parse(localStorage.getItem(RECENT_KEY) || "[]").filter((i: string) => i !== id);
+            recents.unshift(id);
+            localStorage.setItem(RECENT_KEY, JSON.stringify(recents.slice(0, 5)));
+          } catch {}
+        }
+      });
+    });
+
+    sortSel?.addEventListener("change", apply);
+    onlyData?.addEventListener("change", apply);
+    loadRecentPills();
+  </script>
+</Layout>

@@ -1,0 +1,813 @@
+---
+/**
+ * District dashboard — interactive island.
+ *
+ * Server-renders the first district's data so the page is meaningful
+ * without JavaScript, then progressively enhances with a client island
+ * that listens for select/map changes and updates the charts/seasonal/
+ * correlation panels in place.
+ */
+import type {
+  CorrelationResponse,
+  DistrictDetail,
+  DistrictListItem,
+  HistoryResponse,
+} from "../lib/types";
+import { loadCorrelation, loadDistrict, loadHistory } from "../lib/loaders";
+import AqiGauge from "./AqiGauge.astro";
+import AqiDisplay from "./AqiDisplay.astro";
+import HistoryChart from "./HistoryChart.astro";
+import SeasonalGrid from "./SeasonalGrid.astro";
+import CorrelationChart from "./CorrelationChart.astro";
+import DistrictMap from "./DistrictMap.astro";
+import DistrictCombobox from "./DistrictCombobox.astro";
+import PollutantBreakdown from "./PollutantBreakdown.astro";
+import ForecastChart from "./ForecastChart.astro";
+import DistrictComparer from "./DistrictComparer.astro";
+import { categoryDescription, healthAdvice } from "../lib/aqi";
+import { categoryFromAqi } from "../lib/aqi";
+
+interface Props {
+  districts: DistrictListItem[];
+  initialDistrictId: string;
+  sourceLabel: string;
+}
+const { districts, initialDistrictId, sourceLabel } = Astro.props as Props;
+
+const initialLoad = await loadDistrict(initialDistrictId);
+const historyLoad = await loadHistory(initialDistrictId, "1y");
+const correlationLoad = await loadCorrelation(initialDistrictId);
+
+const initial: DistrictDetail | null = initialLoad?.data ?? null;
+const initialHistory: HistoryResponse | null = historyLoad?.data ?? null;
+const initialCorrelation: CorrelationResponse | null =
+  correlationLoad?.data ?? null;
+
+const latest = initialHistory?.data?.[initialHistory.data.length - 1] ?? null;
+const initialAqi = latest?.avg_aqi ?? null;
+const initialCat = categoryFromAqi(initialAqi);
+
+// Sort districts: data first, no-data last
+const sorted = [...districts].sort((a, b) => {
+  if (a.latest_aqi == null && b.latest_aqi == null) return 0;
+  if (a.latest_aqi == null) return 1;
+  if (b.latest_aqi == null) return -1;
+  return b.latest_aqi - a.latest_aqi;
+});
+
+const years = (() => {
+  if (!initialHistory?.data?.length) return 0;
+  const first = new Date(initialHistory.data[0].date);
+  const last = new Date(initialHistory.data[initialHistory.data.length - 1].date);
+  return Math.round(
+    (last.getTime() - first.getTime()) / (1000 * 60 * 60 * 24 * 365),
+  );
+})();
+const advice = healthAdvice(initialCat);
+const description = categoryDescription(initialCat);
+---
+
+<section
+  class="container-prose section-pad"
+  data-district-dashboard
+  data-initial-id={initialDistrictId}
+>
+  <div class="flex flex-col gap-3 mb-8">
+    <span class="badge badge-coral">Live · {sourceLabel}</span>
+    <h1 class="display-lg max-w-3xl">
+      District air quality and weather, on one canvas.
+    </h1>
+    <p class="text-body max-w-2xl">
+      Pick any Indian district to see its current AQI, the last year of
+      history, the seasonal pattern, and how strongly wind and rain move
+      pollution. Numbers come from CPCB, Open-Meteo and IMD.
+    </p>
+  </div>
+
+  <!-- Toolbar -->
+  <div
+    class="card-canvas flex flex-col md:flex-row md:items-end gap-4 mb-6"
+  >
+    <div class="flex-1 min-w-0">
+      <label
+        for="district-combobox"
+        class="block text-xs uppercase tracking-widest text-muted mb-2"
+        style="font-weight:500;"
+      >
+        District Search
+      </label>
+      <DistrictCombobox districts={sorted} initialDistrictId={initialDistrictId} />
+      <div class="mt-2 flex items-center gap-3 flex-wrap">
+        <button type="button" class="btn btn-secondary" data-use-location style="height:36px; padding:0 12px;">
+          Use my location
+        </button>
+        <span class="text-xs text-muted" data-location-status role="status"></span>
+      </div>
+    </div>
+
+    <div>
+      <label
+        for="range-select"
+        class="block text-xs uppercase tracking-widest text-muted mb-2"
+        style="font-weight:500;"
+      >
+        Range
+      </label>
+      <div role="tablist" class="flex gap-1" id="range-select">
+        {
+          [
+            { v: "30d", label: "30 days" },
+            { v: "90d", label: "90 days" },
+            { v: "1y", label: "1 year" },
+          ].map((r) => (
+            <button
+              type="button"
+              role="tab"
+              data-range={r.v}
+              aria-selected={r.v === "1y"}
+              class={`btn ${r.v === "1y" ? "btn-primary" : "btn-secondary"}`}
+              style="height:40px;"
+            >
+              {r.label}
+            </button>
+          ))
+        }
+      </div>
+    </div>
+  </div>
+
+  <!-- Layout grid -->
+  <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+    <!-- Hero card -->
+    <div class="lg:col-span-7 card-canvas">
+      <div class="flex flex-col md:flex-row md:items-center gap-6">
+        <div class="flex-1">
+          <div
+            class="text-xs uppercase tracking-widest text-muted mb-2"
+            style="font-weight:500;"
+          >
+            Currently
+          </div>
+          <h2
+            class="display-md"
+            data-bind="name"
+            style="font-size:clamp(1.5rem, 1.2rem + 1.4vw, 2.25rem);"
+          >
+            {initial?.meta.name ?? "—"}
+          </h2>
+          <p class="text-muted mt-1" data-bind="state">
+            {initial?.meta.state ?? ""}
+          </p>
+          <div class="mt-4">
+            <AqiDisplay aqi={initialAqi} size="lg" />
+          </div>
+          <p
+            class="text-body mt-3 max-w-md"
+            data-bind="category-desc"
+          >
+            {description}
+          </p>
+        </div>
+        <div>
+          <AqiGauge aqi={initialAqi} size={200} />
+        </div>
+      </div>
+
+      <div
+        class="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-4 pt-6"
+        style="border-top: 1px solid var(--color-hairline-soft);"
+      >
+        <div>
+          <div
+            class="text-xs uppercase tracking-widest text-muted"
+            style="font-weight:500;"
+          >
+            Peak (1y)
+          </div>
+          <div
+            class="display-sm"
+            style="font-size:24px; margin-top:2px;"
+            data-bind="peak"
+          >
+            {latest?.max_aqi != null ? Math.round(latest.max_aqi) : "—"}
+          </div>
+        </div>
+        <div>
+          <div
+            class="text-xs uppercase tracking-widest text-muted"
+            style="font-weight:500;"
+          >
+            Stations
+          </div>
+          <div
+            class="display-sm"
+            style="font-size:24px; margin-top:2px;"
+            data-bind="stations"
+          >
+            {initial?.active_station_count ?? "—"}
+          </div>
+        </div>
+        <div>
+          <div
+            class="text-xs uppercase tracking-widest text-muted"
+            style="font-weight:500;"
+          >
+            Last update
+          </div>
+          <div
+            class="display-sm"
+            style="font-size:18px; margin-top:4px;"
+            data-bind="last-update"
+          >
+            {latest?.date ?? "—"}
+          </div>
+        </div>
+        <div>
+          <div
+            class="text-xs uppercase tracking-widest text-muted"
+            style="font-weight:500;"
+          >
+            Coverage
+          </div>
+          <div
+            class="display-sm"
+            style="font-size:18px; margin-top:4px; text-transform: capitalize;"
+            data-bind="coverage"
+          >
+            {latest?.coverage_type?.replace("_", " ") ?? "—"}
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-6 flex flex-wrap gap-2" data-bind="advice">
+        {
+          advice.map((a) => (
+            <span class="badge badge-muted" style="text-transform:none; letter-spacing:0;">
+              {a}
+            </span>
+          ))
+        }
+      </div>
+    </div>
+
+    <!-- Map card -->
+    <div class="lg:col-span-5 card-canvas">
+      <div class="flex items-baseline justify-between gap-3 mb-2">
+        <div>
+          <h3 class="display-sm" style="font-size:22px;">India overview</h3>
+          <p class="text-sm text-muted">
+            Tap a dot to jump districts. Big dots have data, small ones don't.
+          </p>
+        </div>
+        <a href="/districts" class="btn btn-link">All districts →</a>
+      </div>
+      <DistrictMap
+        districts={districts}
+        selectedId={initialDistrictId}
+        size={520}
+      />
+    </div>
+  </div>
+
+  <!-- Pollutant Breakdown & Sensitive Group Advice -->
+  <div class="mt-6 card-canvas">
+    <PollutantBreakdown aqi={initialAqi} />
+  </div>
+
+  <!-- Forecast Section -->
+  <div class="mt-6">
+    <ForecastChart baseAqi={initialAqi} />
+  </div>
+
+  <!-- History + Seasonal + Correlation -->
+  <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 mt-6">
+    <div
+      class="lg:col-span-8 card-canvas"
+      id="history"
+      data-history-card
+    >
+      <div class="flex items-baseline justify-between gap-3 mb-2">
+        <div>
+          <h3 class="display-sm" style="font-size:22px;">
+            AQI history
+          </h3>
+          <p class="text-sm text-muted">
+            Daily averages vs. temperature. Coral is AQI; dashed amber is °C.
+          </p>
+        </div>
+        <span
+          class="badge"
+          style="text-transform:none; letter-spacing:0;"
+          data-bind="range-label"
+        >
+          Last 1 year
+        </span>
+      </div>
+      <div data-history-mount>
+        {
+          initialHistory?.data?.length ? (
+            <HistoryChart data={initialHistory.data} height={300} />
+          ) : (
+            <div class="py-12 text-center text-muted">
+              No history yet for this district.
+            </div>
+          )
+        }
+      </div>
+    </div>
+
+    <div
+      class="lg:col-span-4 card"
+      id="seasonal"
+    >
+      <h3 class="display-sm" style="font-size:22px;">Seasonal pattern</h3>
+      <p class="text-sm text-muted mb-4">
+        Average AQI by IMD season over the last {Math.max(1, years)} year
+        {years === 1 ? "" : "s"}.
+      </p>
+      <div data-seasonal-mount>
+        <SeasonalGrid data={initialCorrelation?.seasonal_pattern ?? null} />
+      </div>
+    </div>
+  </div>
+
+  <div class="card-canvas mt-6" id="correlation">
+    <div class="flex items-baseline justify-between gap-3 mb-2 flex-wrap">
+      <div>
+        <h3 class="display-sm" style="font-size:22px;">
+          Weather correlation
+        </h3>
+        <p class="text-sm text-muted max-w-2xl">
+          Pearson <em>r</em> between AQI and the named weather variable.
+          Negative = pollution drops when that variable rises (the usual
+          outcome for wind and rain).
+        </p>
+      </div>
+    </div>
+    <div data-correlation-mount>
+      <CorrelationChart data={initialCorrelation} />
+    </div>
+  </div>
+
+  <!-- Side-by-Side District Comparer -->
+  <div class="mt-6">
+    <DistrictComparer districts={sorted} defaultIdA={initialDistrictId} />
+  </div>
+</section>
+
+<!-- Serialized, client-side cache of district IDs so the island can pick
+     a sensible default if the user clears the URL. -->
+<script
+  type="application/json"
+  is:inline
+  data-district-ids
+  set:html={JSON.stringify(sorted)}
+/>
+
+<script>
+  import {
+    api,
+  } from "../lib/api.ts";
+  import {
+    categoryDescription,
+    categoryFromAqi,
+    healthAdvice,
+  } from "../lib/aqi.ts";
+
+  function $<T extends HTMLElement>(sel: string, root: ParentNode | null = document) {
+    if (!root) return null;
+    return root.querySelector(sel) as T | null;
+  }
+
+  const root = $("[data-district-dashboard]") as HTMLElement | null;
+  if (!root) {
+    // No dashboard on this page; nothing to wire.
+  } else {
+    const selectEl = $<HTMLSelectElement>("[data-district-select]", root)!;
+    const rangeButtons = root.querySelectorAll<HTMLButtonElement>(
+      "[data-range]",
+    );
+    const historyMount = $("[data-history-mount]", root)!;
+    const seasonalMount = $("[data-seasonal-mount]", root)!;
+    const correlationMount = $("[data-correlation-mount]", root)!;
+    const locationButton = $<HTMLButtonElement>("[data-use-location]", root);
+    const locationStatus = $<HTMLElement>("[data-location-status]", root);
+    const districtDataScript = document.querySelector<HTMLScriptElement>("[data-district-ids]");
+    const districtData = districtDataScript ? JSON.parse(districtDataScript.textContent || "[]") : [];
+
+    let currentId = selectEl.value;
+    let currentRange: "30d" | "90d" | "1y" = "1y";
+
+    function rangeLabel(r: string) {
+      return r === "30d" ? "Last 30 days" : r === "90d" ? "Last 90 days" : "Last 1 year";
+    }
+
+    async function loadAndRender(id: string, range: "30d" | "90d" | "1y") {
+      if (!root) return;
+      const [detail, history, correlation] = await Promise.all([
+        api.district(id).catch(() => null),
+        api.history(id, range).catch(() => null),
+        api.correlation(id).catch(() => null),
+      ]);
+      // If every call failed, leave the existing server-rendered content.
+      if (!detail && !history && !correlation) return;
+
+      const aqi = history?.data?.[history.data.length - 1]?.avg_aqi ?? null;
+      const cat = categoryFromAqi(aqi);
+      const fg = (() => {
+        switch (cat) {
+          case "Good":
+            return "#2a7a2a";
+          case "Satisfactory":
+            return "#486b1a";
+          case "Moderate":
+            return "#7a5a00";
+          case "Poor":
+            return "#8a4a00";
+          case "Very Poor":
+            return "#c2452f";
+          case "Severe":
+            return "#6e1b1b";
+          default:
+            return "#8e8b82";
+        }
+      })();
+      const bg = (() => {
+        switch (cat) {
+          case "Good":
+            return "#dff3df";
+          case "Satisfactory":
+            return "#ecf5cf";
+          case "Moderate":
+            return "#fff3bf";
+          case "Poor":
+            return "#ffe2bf";
+          case "Very Poor":
+            return "#c2452f";
+          case "Severe":
+            return "#6e1b1b";
+          default:
+            return "#ebe6df";
+        }
+      })();
+      const latest = history?.data?.[history.data.length - 1];
+
+      // Hero text
+      const name = $("[data-bind=name]", root) as HTMLElement;
+      const state = $("[data-bind=state]", root) as HTMLElement;
+      const cd = $("[data-bind=category-desc]", root) as HTMLElement;
+      const peak = $("[data-bind=peak]", root) as HTMLElement;
+      const stations = $("[data-bind=stations]", root) as HTMLElement;
+      const lastUpdate = $("[data-bind=last-update]", root) as HTMLElement;
+      const coverage = $("[data-bind=coverage]", root) as HTMLElement;
+      const advice = $("[data-bind=advice]", root) as HTMLElement;
+      const rangeLabelEl = $("[data-bind=range-label]", root) as HTMLElement;
+
+      if (detail) {
+        name.textContent = detail.meta.name;
+        state.textContent = detail.meta.state;
+        stations.textContent = String(detail.active_station_count);
+      }
+      if (latest) {
+        peak.textContent =
+          latest.max_aqi != null ? String(Math.round(latest.max_aqi)) : "—";
+        lastUpdate.textContent = latest.date ?? "—";
+        coverage.textContent = (latest.coverage_type ?? "—").replace(
+          "_",
+          " ",
+        );
+      } else {
+        peak.textContent = "—";
+        lastUpdate.textContent = "—";
+        coverage.textContent = "no data";
+      }
+      cd.textContent = categoryDescription(cat);
+
+      // AQI display
+      const aqiDisplay = root.querySelector(
+        ".flex.items-baseline.gap-4.flex-wrap",
+      ) as HTMLElement | null;
+      if (aqiDisplay) {
+        const num = aqiDisplay.querySelector("span.display") as HTMLElement;
+        const pill = aqiDisplay.querySelector("span.badge") as HTMLElement;
+        if (num) {
+          num.textContent = aqi == null ? "—" : String(Math.round(aqi));
+          num.style.color = fg;
+        }
+        if (pill) {
+          pill.textContent = cat;
+          pill.style.color = cat === "Very Poor" || cat === "Severe" ? "#fff" : fg;
+          pill.style.background = bg;
+        }
+      }
+
+      // Gauge
+      const gaugeSvg = root.querySelector(
+        'div[role="img"][aria-label*="AQI"] svg',
+      ) as SVGSVGElement | null;
+      if (gaugeSvg && aqi != null) {
+        const text = gaugeSvg.querySelector("text.display");
+        if (text) {
+          text.textContent = String(Math.round(aqi));
+          (text as unknown as { style: { fill: string } }).style.fill = fg;
+        }
+        const fgPath = gaugeSvg.querySelector(
+          'path[stroke-linecap="round"]:not([stroke="var(--color-hairline)"])',
+        ) as SVGPathElement | null;
+        if (fgPath) {
+          fgPath.setAttribute("stroke", fg);
+        }
+        const catLabel = gaugeSvg.querySelectorAll("text")[1];
+        if (catLabel) catLabel.textContent = cat;
+      }
+
+      // Advice pills
+      const advices = healthAdvice(cat);
+      advice.innerHTML = advices
+        .map(
+          (a) =>
+            `<span class="badge badge-muted" style="text-transform:none; letter-spacing:0;">${a}</span>`,
+        )
+        .join("");
+
+      // Range label
+      if (rangeLabelEl) rangeLabelEl.textContent = rangeLabel(range);
+
+      // History — render a fresh SVG via innerHTML. The SSR'd chart and the
+      // client-rendered one share the same SVG layout (same IDs/classes).
+      if (history && history.data.length) {
+        historyMount.innerHTML = renderHistorySvg(history.data);
+      } else if (history) {
+        historyMount.innerHTML = `<div class="py-12 text-center text-muted">No history yet for this district.</div>`;
+      }
+
+      if (correlation) {
+        seasonalMount.innerHTML = renderSeasonalGrid(correlation.seasonal_pattern);
+        correlationMount.innerHTML = renderCorrelation(correlation);
+      }
+    }
+
+    // SSR'd helper code that mirrors the server components for the
+    // client-side swap. Keeping it inline (no extra fetch) means the
+    // island is self-contained.
+    function renderHistorySvg(data: any[]): string {
+      const width = 720;
+      const height = 300;
+      const pad = { top: 16, right: 48, bottom: 28, left: 40 };
+      const innerW = width - pad.left - pad.right;
+      const innerH = height - pad.top - pad.bottom;
+      const points = data.filter((d) => d.avg_aqi != null);
+      if (!points.length) return `<div class="py-12 text-center text-muted">No history yet for this district.</div>`;
+      const vals = points.map((d) => d.avg_aqi);
+      const maxAqi = Math.max(500, ...vals);
+      const minAqi = 0;
+      const minDate = points[0].date;
+      const maxDate = points[points.length - 1].date;
+      const xFor = (d: string) => {
+        if (points.length <= 1) return pad.left;
+        const t =
+          (new Date(d).getTime() - new Date(minDate).getTime()) /
+          (new Date(maxDate).getTime() - new Date(minDate).getTime() || 1);
+        return pad.left + t * innerW;
+      };
+      const yForAqi = (v: number) =>
+        pad.top + (1 - (v - minAqi) / (maxAqi - minAqi)) * innerH;
+      const linePath = points
+        .map(
+          (d, i) =>
+            `${i === 0 ? "M" : "L"} ${xFor(d.date).toFixed(1)} ${yForAqi(d.avg_aqi).toFixed(1)}`,
+        )
+        .join(" ");
+      const areaPath = `${linePath} L ${xFor(points[points.length - 1].date).toFixed(1)} ${pad.top + innerH} L ${xFor(points[0].date).toFixed(1)} ${pad.top + innerH} Z`;
+
+      const temps = points.map((p) => p.avg_temp ?? 0);
+      const tMax = Math.max(40, ...temps);
+      const tMin = Math.min(0, ...temps);
+      const tempPath = points
+        .map((d, i) => {
+          if (d.avg_temp == null) return null;
+          const y = pad.top + (1 - (d.avg_temp - tMin) / (tMax - tMin || 1)) * innerH;
+          return `${i === 0 ? "M" : "L"} ${xFor(d.date).toFixed(1)} ${y.toFixed(1)}`;
+        })
+        .filter(Boolean)
+        .join(" ");
+
+      const yTicks = [0, 100, 200, 300, 400, 500];
+      const yLines = yTicks
+        .map((t) => {
+          const y = yForAqi(t);
+          return `<line x1="${pad.left}" y1="${y.toFixed(1)}" x2="${pad.left + innerW}" y2="${y.toFixed(1)}" stroke="var(--color-hairline-soft)" stroke-dasharray="2 4"/><text x="${pad.left - 6}" y="${(y + 3).toFixed(1)}" text-anchor="end" font-size="11" font-family="Inter, sans-serif" fill="var(--color-muted-soft)">${t}</text>`;
+        })
+        .join("");
+      const step = Math.max(1, Math.floor(points.length / 5));
+      const xLabels: string[] = [];
+      for (let i = 0; i < points.length; i += step) {
+        const d = points[i];
+        xLabels.push(`<text x="${xFor(d.date).toFixed(1)}" y="${pad.top + innerH + 18}" text-anchor="middle" font-size="11" font-family="Inter, sans-serif" fill="var(--color-muted-soft)">${d.date.slice(5)}</text>`);
+      }
+      return `
+        <svg viewBox="0 0 ${width} ${height}" width="100%" height="${height}" role="img" aria-label="AQI history chart">
+          <g>${yLines}</g>
+          <path d="${areaPath}" fill="var(--color-primary)" opacity="0.12"/>
+          <path d="${linePath}" fill="none" stroke="var(--color-primary)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+          ${tempPath ? `<path d="${tempPath}" fill="none" stroke="var(--color-accent-amber)" stroke-width="2" stroke-dasharray="3 3"/>` : ""}
+          <g>${xLabels.join("")}</g>
+        </svg>
+        <div class="flex flex-wrap gap-3 mt-2 text-sm text-muted">
+          <span class="inline-flex items-center gap-2"><span class="inline-block w-3 h-0.5" style="background:var(--color-primary);"></span>AQI</span>
+          <span class="inline-flex items-center gap-2"><span class="inline-block w-3" style="border-top:2px dashed var(--color-accent-amber);"></span>Temperature</span>
+        </div>
+      `;
+    }
+
+    function renderSeasonalGrid(p: any): string {
+      const labels: Record<string, string> = {
+        winter: "Winter",
+        summer: "Summer",
+        monsoon: "Monsoon",
+        post_monsoon: "Post-monsoon",
+      };
+      const desc: Record<string, string> = {
+        winter: "Dec – Feb",
+        summer: "Mar – May",
+        monsoon: "Jun – Sep",
+        post_monsoon: "Oct – Nov",
+      };
+      function cat(v: number | null) {
+        if (v == null) return "Unknown";
+        if (v <= 50) return "Good";
+        if (v <= 100) return "Satisfactory";
+        if (v <= 200) return "Moderate";
+        if (v <= 300) return "Poor";
+        if (v <= 400) return "Very Poor";
+        return "Severe";
+      }
+      const colorMap: Record<string, string> = {
+        Good: "#2a7a2a",
+        Satisfactory: "#486b1a",
+        Moderate: "#7a5a00",
+        Poor: "#8a4a00",
+        "Very Poor": "#c2452f",
+        Severe: "#6e1b1b",
+        Unknown: "#8e8b82",
+      };
+      const bgMap: Record<string, string> = {
+        Good: "#dff3df",
+        Satisfactory: "#ecf5cf",
+        Moderate: "#fff3bf",
+        Poor: "#ffe2bf",
+        "Very Poor": "#c2452f",
+        Severe: "#6e1b1b",
+        Unknown: "#ebe6df",
+      };
+      const fixed = ["winter", "summer", "monsoon", "post_monsoon"];
+      return (
+        '<div class="grid grid-cols-2 md:grid-cols-4 gap-3">' +
+        fixed
+          .map((k) => {
+            const v = p?.[k] ?? null;
+            const c = cat(v);
+            const color = colorMap[c];
+            const bg = bgMap[c];
+            return `
+              <div class="flex flex-col gap-1 p-4 rounded-lg" style="background:var(--color-surface-soft); border:1px solid var(--color-hairline-soft);">
+                <div class="text-xs uppercase tracking-widest text-muted" style="font-weight:500;">${labels[k]}</div>
+                <div class="text-xs text-muted-soft" style="font-weight:400;">${desc[k]}</div>
+                <div class="display-md mt-2" style="color:${color}; font-size:32px; line-height:1;">${v == null ? "—" : Math.round(v)}</div>
+                <div class="mt-1"><span class="badge" style="color:${c === "Very Poor" || c === "Severe" ? "#fff" : color}; background:${bg}; font-size:10px;">${c}</span></div>
+              </div>
+            `;
+          })
+          .join("") +
+        "</div>"
+      );
+    }
+
+    function renderCorrelation(c: any): string {
+      function describe(r: number | null) {
+        if (r == null) return { strength: "no data", color: "var(--color-muted)" };
+        const abs = Math.abs(r);
+        let s = "negligible";
+        if (abs >= 0.7) s = "strong";
+        else if (abs >= 0.5) s = "moderately strong";
+        else if (abs >= 0.3) s = "moderate";
+        else if (abs >= 0.1) s = "weak";
+        const dir = r < 0 ? "inverse" : "positive";
+        const color =
+          r < -0.3
+            ? "var(--color-accent-teal)"
+            : r > 0.3
+              ? "var(--color-primary)"
+              : "var(--color-muted)";
+        return { strength: `${s} ${dir}`, color };
+      }
+      const wind = describe(c.wind_correlation);
+      const rain = describe(c.rainfall_correlation);
+      const items = [
+        {
+          label: "Wind speed",
+          sub: "Ventilation effect — higher wind usually disperses pollutants.",
+          value: c.wind_correlation,
+          desc: wind,
+        },
+        {
+          label: "Rainfall",
+          sub: "Washout effect — rain physically scrubs PM from the air.",
+          value: c.rainfall_correlation,
+          desc: rain,
+        },
+      ];
+      return (
+        '<div class="flex flex-col gap-5">' +
+        items
+          .map((it) => {
+            const v = it.value;
+            const pct = v == null ? 50 : Math.max(2, Math.min(98, 50 + v * 50));
+            const barColor = it.desc.color;
+            return `
+              <div>
+                <div class="flex items-baseline justify-between gap-3 flex-wrap">
+                  <div>
+                    <div class="text-sm" style="font-weight:500; color:var(--color-ink);">${it.label}</div>
+                    <div class="text-xs text-muted mt-0.5">${it.sub}</div>
+                  </div>
+                  <div class="flex items-baseline gap-2">
+                    <span class="display-sm" style="font-size:22px; color:${barColor};">${v == null ? "—" : v.toFixed(2)}</span>
+                    <span class="text-sm" style="color:${barColor}; font-weight:500;">${it.desc.strength}</span>
+                  </div>
+                </div>
+                <div class="mt-2 h-2 rounded-pill overflow-hidden" style="background:var(--color-hairline-soft);" role="progressbar" aria-valuemin="-1" aria-valuemax="1" aria-valuenow="${v ?? 0}">
+                  <div class="h-full rounded-pill" style="width:${pct}%; background:${barColor};"></div>
+                </div>
+              </div>
+            `;
+          })
+          .join("") +
+        "</div>"
+      );
+    }
+
+    selectEl.addEventListener("change", () => {
+      currentId = selectEl.value;
+      loadAndRender(currentId, currentRange);
+    });
+    rangeButtons.forEach((b) => {
+      b.addEventListener("click", () => {
+        rangeButtons.forEach((x) => {
+          x.classList.remove("btn-primary");
+          x.classList.add("btn-secondary");
+          x.setAttribute("aria-selected", "false");
+        });
+        b.classList.add("btn-primary");
+        b.classList.remove("btn-secondary");
+        b.setAttribute("aria-selected", "true");
+        const r = b.getAttribute("data-range") as "30d" | "90d" | "1y";
+        currentRange = r;
+        loadAndRender(currentId, currentRange);
+      });
+    });
+    window.addEventListener("district:select", (e) => {
+      const id = (e as CustomEvent<{ id: string }>).detail.id;
+      if (!id) return;
+      selectEl.value = id;
+      currentId = id;
+      loadAndRender(currentId, currentRange);
+    });
+
+    function distanceKm(lat1: number, lon1: number, lat2: number, lon2: number) {
+      const radians = Math.PI / 180;
+      const dLat = (lat2 - lat1) * radians;
+      const dLon = (lon2 - lon1) * radians;
+      const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * radians) * Math.cos(lat2 * radians) * Math.sin(dLon / 2) ** 2;
+      return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }
+
+    locationButton?.addEventListener("click", () => {
+      if (!navigator.geolocation) {
+        if (locationStatus) locationStatus.textContent = "Location is not supported by this browser.";
+        return;
+      }
+      locationButton.disabled = true;
+      if (locationStatus) locationStatus.textContent = "Finding your nearest district...";
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const nearest = districtData
+            .filter((d: any) => d.latitude != null && d.longitude != null)
+            .sort((a: any, b: any) => distanceKm(position.coords.latitude, position.coords.longitude, a.latitude, a.longitude) - distanceKm(position.coords.latitude, position.coords.longitude, b.latitude, b.longitude))[0];
+          if (nearest) {
+            selectEl.value = nearest.district_id;
+            currentId = nearest.district_id;
+            window.dispatchEvent(new CustomEvent("district:select", { detail: { id: nearest.district_id } }));
+            if (locationStatus) locationStatus.textContent = `Showing ${nearest.name}, ${nearest.state}`;
+          }
+          locationButton.disabled = false;
+        },
+        () => {
+          if (locationStatus) locationStatus.textContent = "Location unavailable. Choose a district above.";
+          locationButton.disabled = false;
+        },
+        { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 },
+      );
+    });
+  }
+</script>

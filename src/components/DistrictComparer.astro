@@ -1,0 +1,260 @@
+---
+/**
+ * District Side-by-Side Comparison Island Component
+ *
+ * Allows users to pick any 2 districts to compare AQI, PM2.5, temperature,
+ * wind speed, and pollution categories side-by-side.
+ */
+import type { DistrictListItem } from "../lib/types";
+import { categoryFromAqi, categoryColor, categoryBg } from "../lib/aqi";
+
+interface Props {
+  districts: DistrictListItem[];
+  defaultIdA?: string;
+  defaultIdB?: string;
+}
+
+const { districts, defaultIdA = "dl_delhi", defaultIdB = "ka_bengaluru" } = Astro.props as Props;
+
+const distA = districts.find((d) => d.district_id === defaultIdA) || districts[0];
+const distB = districts.find((d) => d.district_id === defaultIdB) || districts[1] || districts[0];
+
+const catA = categoryFromAqi(distA?.latest_aqi);
+const catB = categoryFromAqi(distB?.latest_aqi);
+---
+
+<div class="card-canvas p-6 flex flex-col gap-6" data-district-comparer>
+  <!-- Header -->
+  <div class="flex items-baseline justify-between flex-wrap gap-2 border-b hairline pb-4">
+    <div>
+      <span class="badge badge-coral mb-1">Interactive Tool</span>
+      <h3 class="display-sm" style="font-size:24px;">District Air Quality Comparator</h3>
+      <p class="text-sm text-muted">Compare live AQI, fine PM2.5, temperature, and wind side-by-side</p>
+    </div>
+  </div>
+
+  <!-- Selectors Toolbar -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div>
+      <label class="block text-xs uppercase tracking-widest text-muted mb-2 font-medium">
+        District A (Primary)
+      </label>
+      <select data-compare-select-a class="input">
+        {
+          districts.map((d) => (
+            <option value={d.district_id} selected={d.district_id === distA.district_id}>
+              {d.name}, {d.state} {d.latest_aqi ? `(AQI ${Math.round(d.latest_aqi)})` : ""}
+            </option>
+          ))
+        }
+      </select>
+    </div>
+
+    <div>
+      <label class="block text-xs uppercase tracking-widest text-muted mb-2 font-medium">
+        District B (Benchmark)
+      </label>
+      <select data-compare-select-b class="input">
+        {
+          districts.map((d) => (
+            <option value={d.district_id} selected={d.district_id === distB.district_id}>
+              {d.name}, {d.state} {d.latest_aqi ? `(AQI ${Math.round(d.latest_aqi)})` : ""}
+            </option>
+          ))
+        }
+      </select>
+    </div>
+  </div>
+
+  <!-- Comparison Cards Grid -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="compare-results-grid">
+    <!-- Card A -->
+    <div class="p-5 rounded-xl bg-surface-soft border hairline flex flex-col gap-4" data-card-a>
+      <div class="flex items-start justify-between">
+        <div>
+          <span class="badge badge-muted text-[10px]" data-state-a>{distA.state}</span>
+          <h4 class="display-md mt-1" style="font-size:26px;" data-name-a>{distA.name}</h4>
+        </div>
+        <span
+          class="badge font-medium text-xs px-2.5 py-1"
+          data-badge-a
+          style={`color:${catA === "Very Poor" || catA === "Severe" ? "#fff" : categoryColor(catA)}; background:${categoryBg(catA)};`}
+        >
+          {catA}
+        </span>
+      </div>
+
+      <div class="flex items-baseline gap-3">
+        <span class="display-xl text-primary font-serif" style="font-size:54px; line-height:1;" data-aqi-a>
+          {distA.latest_aqi ? Math.round(distA.latest_aqi) : "—"}
+        </span>
+        <span class="text-xs text-muted">Headline AQI</span>
+      </div>
+
+      <dl class="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-3 border-t hairline text-xs">
+        <div>
+          <dt class="text-muted text-[10px] uppercase font-medium">PM2.5 Est.</dt>
+          <dd class="font-mono font-medium text-ink mt-0.5" data-pm25-a>
+            {distA.latest_aqi ? Math.round(distA.latest_aqi * 0.65) : "—"} µg/m³
+          </dd>
+        </div>
+        <div>
+          <dt class="text-muted text-[10px] uppercase font-medium">Temperature</dt>
+          <dd class="font-mono font-medium text-ink mt-0.5" data-temp-a>—</dd>
+        </div>
+        <div>
+          <dt class="text-muted text-[10px] uppercase font-medium">Wind</dt>
+          <dd class="font-mono font-medium text-ink mt-0.5" data-wind-a>—</dd>
+        </div>
+        <div>
+          <dt class="text-muted text-[10px] uppercase font-medium">Season baseline</dt>
+          <dd class="font-mono font-medium text-ink mt-0.5" data-season-a>—</dd>
+        </div>
+        <div>
+          <dt class="text-muted text-[10px] uppercase font-medium">Coverage</dt>
+          <dd class="font-medium text-ink capitalize mt-0.5" data-coverage-a>
+            {distA.coverage_type || "station"}
+          </dd>
+        </div>
+        <div>
+          <dt class="text-muted text-[10px] uppercase font-medium">Status</dt>
+          <dd class="font-medium text-ink mt-0.5" data-status-a>
+            {distA.latest_aqi ? "Live" : "No data"}
+          </dd>
+        </div>
+      </dl>
+    </div>
+
+    <!-- Card B -->
+    <div class="p-5 rounded-xl bg-surface-soft border hairline flex flex-col gap-4" data-card-b>
+      <div class="flex items-start justify-between">
+        <div>
+          <span class="badge badge-muted text-[10px]" data-state-b>{distB.state}</span>
+          <h4 class="display-md mt-1" style="font-size:26px;" data-name-b>{distB.name}</h4>
+        </div>
+        <span
+          class="badge font-medium text-xs px-2.5 py-1"
+          data-badge-b
+          style={`color:${catB === "Very Poor" || catB === "Severe" ? "#fff" : categoryColor(catB)}; background:${categoryBg(catB)};`}
+        >
+          {catB}
+        </span>
+      </div>
+
+      <div class="flex items-baseline gap-3">
+        <span class="display-xl text-primary font-serif" style="font-size:54px; line-height:1;" data-aqi-b>
+          {distB.latest_aqi ? Math.round(distB.latest_aqi) : "—"}
+        </span>
+        <span class="text-xs text-muted">Headline AQI</span>
+      </div>
+
+      <dl class="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-3 border-t hairline text-xs">
+        <div>
+          <dt class="text-muted text-[10px] uppercase font-medium">PM2.5 Est.</dt>
+          <dd class="font-mono font-medium text-ink mt-0.5" data-pm25-b>
+            {distB.latest_aqi ? Math.round(distB.latest_aqi * 0.65) : "—"} µg/m³
+          </dd>
+        </div>
+        <div>
+          <dt class="text-muted text-[10px] uppercase font-medium">Temperature</dt>
+          <dd class="font-mono font-medium text-ink mt-0.5" data-temp-b>—</dd>
+        </div>
+        <div>
+          <dt class="text-muted text-[10px] uppercase font-medium">Wind</dt>
+          <dd class="font-mono font-medium text-ink mt-0.5" data-wind-b>—</dd>
+        </div>
+        <div>
+          <dt class="text-muted text-[10px] uppercase font-medium">Season baseline</dt>
+          <dd class="font-mono font-medium text-ink mt-0.5" data-season-b>—</dd>
+        </div>
+        <div>
+          <dt class="text-muted text-[10px] uppercase font-medium">Coverage</dt>
+          <dd class="font-medium text-ink capitalize mt-0.5" data-coverage-b>
+            {distB.coverage_type || "station"}
+          </dd>
+        </div>
+        <div>
+          <dt class="text-muted text-[10px] uppercase font-medium">Status</dt>
+          <dd class="font-medium text-ink mt-0.5" data-status-b>
+            {distB.latest_aqi ? "Live" : "No data"}
+          </dd>
+        </div>
+      </dl>
+    </div>
+  </div>
+</div>
+
+<!-- Serialized dataset payload for client-side comparison -->
+<script type="application/json" id="comparer-data" is:inline set:html={JSON.stringify(districts)} />
+
+<script>
+  import { api } from "../lib/api";
+  import type { DistrictListItem } from "../lib/types";
+  import { categoryFromAqi, categoryColor, categoryBg } from "../lib/aqi";
+
+  const root = document.querySelector<HTMLElement>("[data-district-comparer]");
+  const dataScript = document.getElementById("comparer-data");
+  const districtsList: DistrictListItem[] = dataScript ? JSON.parse(dataScript.textContent || "[]") : [];
+
+  if (root && districtsList.length) {
+    const selectA = root.querySelector<HTMLSelectElement>("[data-compare-select-a]");
+    const selectB = root.querySelector<HTMLSelectElement>("[data-compare-select-b]");
+
+    async function updateCard(slot: "a" | "b", id: string) {
+      const d = districtsList.find((item) => item.district_id === id);
+      if (!d) return;
+
+      const cat = categoryFromAqi(d.latest_aqi);
+      const color = categoryColor(cat);
+      const bg = categoryBg(cat);
+
+      const nameEl = root!.querySelector(`[data-name-${slot}]`);
+      const stateEl = root!.querySelector(`[data-state-${slot}]`);
+      const badgeEl = root!.querySelector(`[data-badge-${slot}]`) as HTMLElement;
+      const aqiEl = root!.querySelector(`[data-aqi-${slot}]`);
+      const pm25El = root!.querySelector(`[data-pm25-${slot}]`);
+      const coverageEl = root!.querySelector(`[data-coverage-${slot}]`);
+      const statusEl = root!.querySelector(`[data-status-${slot}]`);
+      const tempEl = root!.querySelector(`[data-temp-${slot}]`);
+      const windEl = root!.querySelector(`[data-wind-${slot}]`);
+      const seasonEl = root!.querySelector(`[data-season-${slot}]`);
+
+      if (nameEl) nameEl.textContent = d.name;
+      if (stateEl) stateEl.textContent = d.state;
+      if (aqiEl) aqiEl.textContent = d.latest_aqi ? String(Math.round(d.latest_aqi)) : "—";
+      if (pm25El) pm25El.textContent = d.latest_aqi ? `${Math.round(d.latest_aqi * 0.65)} µg/m³` : "—";
+      if (coverageEl) coverageEl.textContent = d.coverage_type || "station";
+      if (statusEl) statusEl.textContent = d.latest_aqi ? "Live" : "No data";
+      if (tempEl) tempEl.textContent = "Loading...";
+      if (windEl) windEl.textContent = "Loading...";
+      if (seasonEl) seasonEl.textContent = "Loading...";
+
+      if (badgeEl) {
+        badgeEl.textContent = cat;
+        badgeEl.style.color = cat === "Very Poor" || cat === "Severe" ? "#fff" : color;
+        badgeEl.style.background = bg;
+      }
+
+      try {
+        const history = await api.history(d.district_id, "30d");
+        const points = history.data.filter((point) => point.avg_aqi != null);
+        const latest = history.data[history.data.length - 1];
+        const baseline = points.length
+          ? points.reduce((sum, point) => sum + (point.avg_aqi ?? 0), 0) / points.length
+          : null;
+        if (tempEl) tempEl.textContent = latest?.avg_temp != null ? `${latest.avg_temp.toFixed(1)} °C` : "No data";
+        if (windEl) windEl.textContent = latest?.avg_wind != null ? `${latest.avg_wind.toFixed(1)} km/h` : "No data";
+        if (seasonEl) seasonEl.textContent = baseline != null ? `${Math.round(baseline)} AQI` : "No data";
+      } catch {
+        if (tempEl) tempEl.textContent = "No data";
+        if (windEl) windEl.textContent = "No data";
+        if (seasonEl) seasonEl.textContent = "No data";
+      }
+    }
+
+    selectA?.addEventListener("change", () => void updateCard("a", selectA.value));
+    selectB?.addEventListener("change", () => void updateCard("b", selectB.value));
+    if (selectA) void updateCard("a", selectA.value);
+    if (selectB) void updateCard("b", selectB.value);
+  }
+</script>

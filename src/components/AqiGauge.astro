@@ -1,0 +1,90 @@
+---
+/**
+ * SVG arc gauge showing the current AQI value along the CPCB banding.
+ * Pure presentational — values are passed in. Reusable at any size.
+ */
+import { categoryFromAqi, categoryColor, type AqiCategory } from "../lib/aqi";
+
+interface Props {
+  aqi: number | null;
+  size?: number;
+  label?: string;
+}
+const { aqi, size = 180, label = "AQI" } = Astro.props as Props;
+
+const clamped = aqi == null ? 0 : Math.max(0, Math.min(500, aqi));
+const pct = clamped / 500;
+const radius = size / 2 - 14;
+const cx = size / 2;
+const cy = size / 2;
+
+// arc geometry
+const startAngle = -200;
+const endAngle = 20;
+const angle = startAngle + (endAngle - startAngle) * pct;
+
+function polar(angleDeg: number) {
+  const a = (angleDeg * Math.PI) / 180;
+  return { x: cx + radius * Math.cos(a), y: cy + radius * Math.sin(a) };
+}
+
+const arcPath = (from: number, to: number) => {
+  const s = polar(from);
+  const e = polar(to);
+  const large = Math.abs(to - from) > 180 ? 1 : 0;
+  const sweep = to > from ? 1 : 0;
+  return `M ${s.x} ${s.y} A ${radius} ${radius} 0 ${large} ${sweep} ${e.x} ${e.y}`;
+};
+
+const bg = arcPath(startAngle, endAngle);
+const fg = arcPath(startAngle, angle);
+
+const cat: AqiCategory = categoryFromAqi(aqi);
+const accent = categoryColor(cat);
+---
+
+<div
+  class="inline-flex flex-col items-center"
+  role="img"
+  aria-label={`AQI ${aqi == null ? "unavailable" : Math.round(aqi)}, category ${cat}`}
+>
+  <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+    <path
+      d={bg}
+      fill="none"
+      stroke="var(--color-hairline)"
+      stroke-width="10"
+      stroke-linecap="round"
+    />
+    <path
+      d={fg}
+      fill="none"
+      stroke={accent}
+      stroke-width="10"
+      stroke-linecap="round"
+    />
+    <text
+      x={cx}
+      y={cy - 4}
+      text-anchor="middle"
+      class="display"
+      style={`font-size:${size / 4.5}px; font-weight:400; fill:${accent}; letter-spacing:-0.04em;`}
+    >
+      {aqi == null ? "—" : Math.round(aqi)}
+    </text>
+    <text
+      x={cx}
+      y={cy + size / 7}
+      text-anchor="middle"
+      style="font-size:11px; font-weight:500; fill:var(--color-muted); letter-spacing:0.12em; text-transform:uppercase;"
+    >
+      {cat}
+    </text>
+  </svg>
+  <span
+    class="text-xs uppercase tracking-widest text-muted mt-2"
+    style="font-weight:500;"
+  >
+    {label}
+  </span>
+</div>

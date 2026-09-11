@@ -1,0 +1,308 @@
+---
+/**
+ * Global Search Modal Component (Cmd+K / Ctrl+K)
+ *
+ * Built as a universal <div> overlay to guarantee 100% compatibility
+ * across all browsers without native <dialog> restrictions.
+ */
+import type { DistrictListItem } from "../lib/types";
+
+interface Props {
+  districts: DistrictListItem[];
+}
+
+const { districts } = Astro.props as Props;
+---
+
+<!-- Global Search Modal Overlay -->
+<div
+  id="search-modal-backdrop"
+  class="fixed inset-0 z-50 hidden items-center justify-center p-4 md:p-12 bg-ink/60 backdrop-blur-sm transition-all"
+  role="dialog"
+  aria-modal="true"
+  aria-label="Search districts modal"
+>
+  <div
+    id="search-modal-card"
+    class="w-full max-w-2xl rounded-xl bg-canvas border hairline shadow-2xl p-4 md:p-6 flex flex-col gap-3 max-h-[85vh] overflow-hidden"
+  >
+    <!-- Header Input -->
+    <div class="flex items-center gap-3 pb-3 border-b hairline">
+      <svg
+        width="20"
+        height="20"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="var(--color-muted)"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="11" cy="11" r="8"></circle>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+      </svg>
+      <input
+        id="global-search-input"
+        type="search"
+        placeholder="Search any district, state, or AQI status (e.g. Delhi, Severe)..."
+        class="w-full bg-transparent text-ink text-base focus:outline-none placeholder:text-muted-soft"
+        autocomplete="off"
+      />
+      <button
+        type="button"
+        id="close-modal-btn"
+        class="px-2 py-0.5 text-xs text-muted hover:text-ink bg-surface-soft hover:bg-surface-card border hairline rounded cursor-pointer transition-colors"
+      >
+        ESC ✕
+      </button>
+    </div>
+
+    <!-- Recent & Results Section -->
+    <div class="overflow-y-auto py-2 flex flex-col gap-4 max-h-[55vh]">
+      <!-- Recent Searches Container -->
+      <div id="recent-searches-section" class="hidden">
+        <div class="flex items-center justify-between px-2 mb-2">
+          <span class="text-xs uppercase tracking-widest text-muted font-medium">
+            Recent Searches
+          </span>
+          <button
+            type="button"
+            id="clear-recent-btn"
+            class="text-xs text-primary hover:underline cursor-pointer"
+          >
+            Clear
+          </button>
+        </div>
+        <div id="recent-searches-list" class="flex flex-col gap-1"></div>
+      </div>
+
+      <!-- Live Search Results -->
+      <div>
+        <div class="px-2 mb-2 text-xs uppercase tracking-widest text-muted font-medium" id="results-count-label">
+          All Districts
+        </div>
+        <div id="search-results-list" class="flex flex-col gap-1"></div>
+      </div>
+    </div>
+
+    <!-- Footer help text -->
+    <div class="pt-3 border-t hairline flex items-center justify-between text-xs text-muted">
+      <span>Press <kbd class="px-1 py-0.5 bg-surface-soft rounded">↵ Enter</kbd> to select</span>
+      <span>Press <kbd class="px-1 py-0.5 bg-surface-soft rounded">⌘K</kbd> to open</span>
+    </div>
+  </div>
+</div>
+
+<!-- Serialized district JSON payload for instant client search -->
+<script type="application/json" id="districts-json-data" set:html={JSON.stringify(districts)} />
+
+<script>
+  import type { DistrictListItem } from "../lib/types";
+
+  const backdrop = document.getElementById("search-modal-backdrop");
+  const input = document.getElementById("global-search-input") as HTMLInputElement | null;
+  const closeBtn = document.getElementById("close-modal-btn");
+  const resultsContainer = document.getElementById("search-results-list");
+  const recentSection = document.getElementById("recent-searches-section");
+  const recentContainer = document.getElementById("recent-searches-list");
+  const clearRecentBtn = document.getElementById("clear-recent-btn");
+  const countLabel = document.getElementById("results-count-label");
+
+  const dataScript = document.getElementById("districts-json-data");
+  const allDistricts: DistrictListItem[] = dataScript ? JSON.parse(dataScript.textContent || "[]") : [];
+
+  let selectedIndex = 0;
+  const RECENT_KEY = "india_aqi_recent_searches";
+
+  function getRecentSearches(): string[] {
+    try {
+      return JSON.parse(localStorage.getItem(RECENT_KEY) || "[]");
+    } catch {
+      return [];
+    }
+  }
+
+  function saveRecentSearch(districtId: string) {
+    const recents = getRecentSearches().filter((id) => id !== districtId);
+    recents.unshift(districtId);
+    localStorage.setItem(RECENT_KEY, JSON.stringify(recents.slice(0, 5)));
+  }
+
+  function navigateToDistrict(id: string) {
+    saveRecentSearch(id);
+    doCloseModal();
+    window.location.href = `/districts/${id}`;
+  }
+
+  function renderRecentSearches() {
+    if (!recentSection || !recentContainer) return;
+    const recentIds = getRecentSearches();
+    const recentDistricts = recentIds
+      .map((id) => allDistricts.find((d) => d.district_id === id))
+      .filter(Boolean) as DistrictListItem[];
+
+    if (recentDistricts.length === 0) {
+      recentSection.classList.add("hidden");
+      return;
+    }
+
+    recentSection.classList.remove("hidden");
+    recentContainer.innerHTML = recentDistricts
+      .map(
+        (d) => `
+        <a
+          href="/districts/${d.district_id}"
+          data-district-item="${d.district_id}"
+          class="flex items-center justify-between p-2.5 rounded-lg hover:bg-surface-soft no-underline transition-colors cursor-pointer"
+        >
+          <div class="flex items-center gap-2">
+            <span class="text-sm font-medium text-ink">🕒 ${d.name}</span>
+            <span class="text-xs text-muted">${d.state}</span>
+          </div>
+          ${
+            d.latest_aqi != null
+              ? `<span class="px-2 py-0.5 text-xs rounded font-medium bg-surface-card text-ink">AQI ${Math.round(d.latest_aqi)}</span>`
+              : `<span class="text-xs text-muted">no data</span>`
+          }
+        </a>
+      `,
+      )
+      .join("");
+  }
+
+  function renderResults(term: string) {
+    if (!resultsContainer) return;
+    const q = term.trim().toLowerCase();
+
+    const filtered = allDistricts.filter((d) => {
+      if (!q) return true;
+      const name = d.name.toLowerCase();
+      const state = d.state.toLowerCase();
+      const aqiStr = d.latest_aqi != null ? String(d.latest_aqi) : "";
+      return name.includes(q) || state.includes(q) || aqiStr.includes(q);
+    });
+
+    if (countLabel) {
+      countLabel.textContent = q ? `${filtered.length} matches` : "All Districts";
+    }
+
+    if (filtered.length === 0) {
+      resultsContainer.innerHTML = `
+        <div class="py-8 text-center text-sm text-muted">
+          No districts matching "${term}"
+        </div>
+      `;
+      return;
+    }
+
+    resultsContainer.innerHTML = filtered
+      .slice(0, 15)
+      .map(
+        (d, idx) => `
+        <a
+          href="/districts/${d.district_id}"
+          data-district-item="${d.district_id}"
+          class="search-result-item flex items-center justify-between p-2.5 rounded-lg no-underline transition-colors cursor-pointer ${
+            idx === selectedIndex ? "bg-surface-soft border hairline" : "hover:bg-surface-soft"
+          }"
+        >
+          <div>
+            <div class="text-sm font-medium text-ink">${d.name}</div>
+            <div class="text-xs text-muted">${d.state}</div>
+          </div>
+          <div class="flex items-center gap-2">
+            ${
+              d.coverage_type === "predicted"
+                ? `<span class="px-2 py-0.5 text-[10px] rounded bg-primary/10 text-primary border border-primary/20">Predicted</span>`
+                : ""
+            }
+            ${
+              d.latest_aqi != null
+                ? `<span class="px-2 py-0.5 text-xs rounded font-medium bg-surface-card text-ink">AQI ${Math.round(d.latest_aqi)}</span>`
+                : `<span class="text-xs text-muted">no data</span>`
+            }
+          </div>
+        </a>
+      `,
+      )
+      .join("");
+
+    resultsContainer.querySelectorAll("[data-district-item]").forEach((item) => {
+      item.addEventListener("click", () => {
+        const id = item.getAttribute("data-district-item");
+        if (id) saveRecentSearch(id);
+      });
+    });
+  }
+
+  function doOpenModal() {
+    if (backdrop) {
+      backdrop.classList.remove("hidden");
+      backdrop.classList.add("flex");
+      renderRecentSearches();
+      renderResults("");
+      if (input) {
+        input.value = "";
+        setTimeout(() => input.focus(), 50);
+      }
+    }
+  }
+
+  function doCloseModal() {
+    if (backdrop) {
+      backdrop.classList.add("hidden");
+      backdrop.classList.remove("flex");
+    }
+  }
+
+  // Expose global opener
+  (window as unknown as { openSearchModal: () => void }).openSearchModal = doOpenModal;
+
+  window.addEventListener("open-search-modal", doOpenModal);
+
+  window.addEventListener("keydown", (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+      e.preventDefault();
+      doOpenModal();
+    } else if (e.key === "Escape" && backdrop && !backdrop.classList.contains("hidden")) {
+      e.preventDefault();
+      doCloseModal();
+    }
+  });
+
+  closeBtn?.addEventListener("click", doCloseModal);
+
+  backdrop?.addEventListener("click", (e) => {
+    if (e.target === backdrop) doCloseModal();
+  });
+
+  input?.addEventListener("input", () => {
+    selectedIndex = 0;
+    renderResults(input.value);
+  });
+
+  input?.addEventListener("keydown", (e) => {
+    const items = resultsContainer?.querySelectorAll<HTMLElement>("[data-district-item]");
+    if (!items || items.length === 0) return;
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      selectedIndex = Math.min(selectedIndex + 1, items.length - 1);
+      renderResults(input.value);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      selectedIndex = Math.max(selectedIndex - 1, 0);
+      renderResults(input.value);
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      const targetItem = items[selectedIndex];
+      const id = targetItem?.getAttribute("data-district-item");
+      if (id) navigateToDistrict(id);
+    }
+  });
+
+  clearRecentBtn?.addEventListener("click", () => {
+    localStorage.removeItem(RECENT_KEY);
+    renderRecentSearches();
+  });
+</script>

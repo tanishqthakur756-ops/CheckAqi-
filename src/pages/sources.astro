@@ -1,0 +1,271 @@
+---
+import Layout from "../layouts/Layout.astro";
+import { loadSources } from "../lib/loaders";
+
+const sources = (await loadSources()).data;
+const officialSources = sources.filter((s) => s.category !== "popular_website");
+const popularWebsites = sources.filter((s) => s.category === "popular_website");
+---
+
+<Layout
+  title="Data sources & AQI Prediction"
+  description="Where the AQI and weather data come from, spatial prediction methodology for unmonitored districts, and integration with popular platforms."
+>
+  <section class="container-prose section-pad">
+    <div class="max-w-2xl">
+      <span class="badge badge-coral mb-3">Provenance & Models</span>
+      <h1 class="display-lg">Data sources, Popular APIs & Spatial Prediction</h1>
+      <p class="text-body mt-4">
+        Everything on the dashboard is powered by official CPCB stations, IMD climate calendars, Open-Meteo weather physics, and our Inverse Distance Weighting (IDW) spatial prediction model for unmonitored districts.
+      </p>
+    </div>
+  </section>
+
+  <!-- Primary Official Sources -->
+  <section class="container-prose" style="padding-bottom:32px;">
+    <h2 class="display-sm mb-4" style="font-size:22px;">Government & Open Meteorological Datasets</h2>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {
+        officialSources.map((s, i) => (
+          <article
+            class="card-canvas flex flex-col gap-3"
+            style={i === 0 ? "border-color: var(--color-primary);" : ""}
+          >
+            <div class="flex items-center justify-between">
+              <span class="badge" style="background:var(--color-surface-soft);">
+                {s.source_name}
+              </span>
+              <span
+                class="text-xs text-muted-soft"
+                style="font-family: var(--font-mono);"
+              >
+                {s.last_synced_at ? s.last_synced_at.slice(0, 10) : "—"}
+              </span>
+            </div>
+            <h3 class="display-sm" style="font-size:20px;">
+              {s.source_name}
+            </h3>
+            <p class="text-sm text-body">
+              {s.coverage_description || s.license_note || "License: see source website."}
+            </p>
+            <a
+              href={s.source_url ?? "#"}
+              class="btn btn-link mt-auto self-start"
+              rel="noopener"
+              target="_blank"
+            >
+              Visit source ↗
+            </a>
+          </article>
+        ))
+      }
+    </div>
+  </section>
+
+  <!-- Popular Website Platforms & External Providers -->
+  <section class="container-prose" style="padding-bottom:64px;">
+    <div class="flex flex-col gap-2 mb-6">
+      <span class="badge badge-muted self-start">Integrations & Comparison</span>
+      <h2 class="display-sm" style="font-size:22px;">Popular Air Quality Platforms & External APIs</h2>
+      <p class="text-body text-sm max-w-2xl">
+        We cross-reference data and prediction algorithms with leading public air quality platforms to verify accuracy in districts where direct CPCB station hardware is not yet installed.
+      </p>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {
+        popularWebsites.map((s) => (
+          <article class="card-canvas flex flex-col gap-3">
+            <div class="flex items-center justify-between">
+              <span class="badge bg-primary/10 text-primary border border-primary/20">
+                {s.api_status === "integrated" ? "Direct Feed" : "Model Estimated"}
+              </span>
+              <span class="text-xs text-muted-soft font-mono">
+                Popular Provider
+              </span>
+            </div>
+            <h3 class="display-sm" style="font-size:20px;">
+              {s.source_name}
+            </h3>
+            <p class="text-sm text-body">
+              {s.coverage_description}
+            </p>
+            <div class="text-xs text-muted pt-2 border-t hairline">
+              {s.license_note}
+            </div>
+            <a
+              href={s.source_url ?? "#"}
+              class="btn btn-link mt-auto self-start"
+              rel="noopener"
+              target="_blank"
+            >
+              Explore website ↗
+            </a>
+          </article>
+        ))
+      }
+    </div>
+  </section>
+
+  <!-- Spatial Prediction Methodology Explanation -->
+  <section class="container-prose" style="padding-bottom:64px;">
+    <div class="card-canvas p-6 md:p-8">
+      <span class="badge badge-coral mb-3">Model Architecture</span>
+      <h2 class="display-md" style="font-size:26px;">How We Predict Air Quality for Unmonitored Districts</h2>
+      <p class="text-body mt-3 max-w-3xl">
+        In Indian districts where physical continuous monitoring stations (CPCB) are missing, we run a multi-variable Spatial Prediction Model:
+      </p>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
+        <div>
+          <div class="text-xs font-mono uppercase tracking-widest text-primary">01 · Spatial IDW</div>
+          <h4 class="font-medium text-ink mt-1">Inverse Distance Weighting</h4>
+          <p class="text-xs text-muted mt-1 leading-relaxed">
+            Interpolates ground PM2.5/PM10 readings from the 5 nearest active stations within a 450km radius weighted by $1/d^2$.
+          </p>
+        </div>
+        <div>
+          <div class="text-xs font-mono uppercase tracking-widest text-primary">02 · Wind Dispersion</div>
+          <h4 class="font-medium text-ink mt-1">Wind Vector Adjustment</h4>
+          <p class="text-xs text-muted mt-1 leading-relaxed">
+            Applies Open-Meteo wind speed vectors to scale down pollution under high ventilation velocity.
+          </p>
+        </div>
+        <div>
+          <div class="text-xs font-mono uppercase tracking-widest text-primary">03 · Seasonal Baseline</div>
+          <h4 class="font-medium text-ink mt-1">IMD Climate Calendars</h4>
+          <p class="text-xs text-muted mt-1 leading-relaxed">
+            Factors in IMD monsoon rainfall washouts and winter thermal inversion baselines per region.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- API Reference -->
+  <section
+    id="api"
+    class="bg-surface-dark text-on-dark"
+    style="padding-block:64px;"
+  >
+    <div class="container-prose">
+      <div class="max-w-2xl">
+        <span
+          class="badge badge-dark"
+          style="background:rgba(255,255,255,0.06); color:var(--color-on-dark-soft);"
+        >
+          API
+        </span>
+        <h2
+          class="display-lg mt-3"
+          style="color:var(--color-on-dark);"
+        >
+          The same data, over JSON.
+        </h2>
+        <p
+          class="mt-4"
+          style="color:var(--color-on-dark-soft); font-size:18px; line-height:1.6;"
+        >
+          Every panel on the dashboard is a thin wrapper over a small
+          set of endpoints. No keys, no rate limits — read what you need.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-10">
+        {
+          [
+            {
+              method: "GET",
+              path: "/api/districts/",
+              desc: "List all districts with their latest AQI & prediction status.",
+            },
+            {
+              method: "GET",
+              path: "/api/districts/{id}",
+              desc: "District metadata, active station count, and prediction confidence.",
+            },
+            {
+              method: "GET",
+              path: "/api/districts/{id}/history?range=1y",
+              desc: "Daily rollups. Range is 30d, 90d, or 1y.",
+            },
+            {
+              method: "GET",
+              path: "/api/districts/{id}/correlation",
+              desc: "Seasonal averages + Pearson r with wind/rain.",
+            },
+            {
+              method: "GET",
+              path: "/api/sources/",
+              desc: "Metadata about official datasets & popular external website APIs.",
+            },
+            {
+              method: "GET",
+              path: "/health",
+              desc: "Liveness check. Returns {status: ok}.",
+            },
+          ].map((e) => (
+            <div
+              class="rounded-lg p-5"
+              style="background:var(--color-surface-dark-elevated); border:1px solid #2a2723;"
+            >
+              <div class="flex items-center gap-3">
+                <span
+                  class="badge"
+                  style="background:rgba(93,184,166,0.18); color:#5db8a6; font-family: var(--font-mono); font-size:11px;"
+                >
+                  {e.method}
+                </span>
+                <code
+                  style="font-family: var(--font-mono); color:var(--color-on-dark); font-size:13px;"
+                >
+                  {e.path}
+                </code>
+              </div>
+              <p
+                class="mt-3 text-sm"
+                style="color:var(--color-on-dark-soft);"
+              >
+                {e.desc}
+              </p>
+            </div>
+          ))
+        }
+      </div>
+
+      <div
+        class="mt-10 rounded-lg overflow-hidden"
+        style="background:var(--color-surface-dark-soft); border:1px solid #2a2723;"
+      >
+        <div
+          class="flex items-center justify-between gap-2 px-4 py-2"
+          style="background:var(--color-surface-dark-elevated); border-bottom:1px solid #2a2723;"
+        >
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full" style="background:#ff5f56;"></span>
+            <span class="w-2.5 h-2.5 rounded-full" style="background:#ffbd2e;"></span>
+            <span class="w-2.5 h-2.5 rounded-full" style="background:#27c93f;"></span>
+          </div>
+          <span
+            class="text-xs"
+            style="color:var(--color-on-dark-soft); font-family: var(--font-mono);"
+          >
+            curl
+          </span>
+          <span class="w-12"></span>
+        </div>
+        <pre
+          class="m-0 p-6 text-sm overflow-x-auto"
+          style="color:var(--color-on-dark); font-family: var(--font-mono); line-height:1.6; font-size:13px;"
+        ><code><span style="color:#a09d96;"># Today's AQI for every district (including spatial predictions)</span>
+$ curl http://127.0.0.1:8000/api/districts/ | jq
+
+<span style="color:#a09d96;"># One year of history for New Delhi</span>
+$ curl http://127.0.0.1:8000/api/districts/dl_new/history?range=1y | jq
+
+<span style="color:#a09d96;"># Pearson r vs. wind and rain for Bengaluru</span>
+$ curl http://127.0.0.1:8000/api/districts/ka_bengaluru/correlation | jq</code></pre>
+      </div>
+    </div>
+  </section>
+</Layout>

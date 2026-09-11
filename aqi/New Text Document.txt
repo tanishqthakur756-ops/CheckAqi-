@@ -1,0 +1,226 @@
+{
+    "index_name": "3b01bcb8-0b14-4abf-b6f2-c1bfd384ba69",
+    "title": "Real time Air Quality Index from various locations",
+    "desc": "Real time Air Quality Index from various locations",
+    "org_type": "Central",
+    "org": [
+        "Ministry of Environment, Forest and Climate Change",
+        "Central Pollution Control Board"
+    ],
+    "sector": [
+        "Environment and Forest",
+        "Industrial Air Pollution",
+        "Residential Air Pollution",
+        "Vehicular Air Pollution"
+    ],
+    "source": "data.gov.in",
+    "catalog_uuid": "a3e7afc6-b799-4ede-b143-8e074b27e062",
+    "visualizable": "1",
+    "active": "1",
+    "created": 1470249000,
+    "updated": 1788170529,
+    "created_date": "2016-04-08T00:00:00Z",
+    "updated_date": "2026-08-31T10:02:09Z",
+    "external_ws": 0,
+    "external_ws_url": "",
+    "target_bucket": {
+        "index": "air_quality",
+        "type": "3b01bcb8-0b14-4abf-b6f2-c1bfd384ba69"
+    },
+    "field": [
+        {
+            "name": "country",
+            "id": "country",
+            "type": "keyword"
+        },
+        {
+            "name": "state",
+            "id": "state",
+            "type": "keyword"
+        },
+        {
+            "name": "city",
+            "id": "city",
+            "type": "keyword"
+        },
+        {
+            "name": "station",
+            "id": "station",
+            "type": "keyword"
+        },
+        {
+            "name": "last_update",
+            "id": "last_update",
+            "type": "keyword"
+        },
+        {
+            "name": "latitude",
+            "id": "latitude",
+            "type": "keyword"
+        },
+        {
+            "name": "longitude",
+            "id": "longitude",
+            "type": "keyword"
+        },
+        {
+            "name": "pollutant_id",
+            "id": "pollutant_id",
+            "type": "keyword"
+        },
+        {
+            "name": "pollutant_min",
+            "id": "min_value",
+            "type": "keyword"
+        },
+        {
+            "name": "pollutant_max",
+            "id": "max_value",
+            "type": "keyword"
+        },
+        {
+            "name": "pollutant_avg",
+            "id": "avg_value",
+            "type": "keyword"
+        }
+    ],
+    "message": "Resource lists",
+    "version": "2.2.0",
+    "status": "ok",
+    "total": 3542,
+    "count": 10,
+    "limit": "10",
+    "offset": "0",
+    "records": [
+        {
+            "country": "India",
+            "state": "Bihar",
+            "city": "Siwan",
+            "station": "Chitragupta Nagar, Siwan - BSPCB",
+            "last_update": "31-08-2026 15:00:00",
+            "latitude": "26.2271665",
+            "longitude": "84.3570427",
+            "pollutant_id": "CO",
+            "min_value": "63",
+            "max_value": "66",
+            "avg_value": "65"
+        },
+        {
+            "country": "India",
+            "state": "Chandigarh",
+            "city": "Chandigarh",
+            "station": "Sector 22, Chandigarh - CPCC",
+            "last_update": "31-08-2026 15:00:00",
+            "latitude": "30.735567",
+            "longitude": "76.775714",
+            "pollutant_id": "NH3",
+            "min_value": "3",
+            "max_value": "9",
+            "avg_value": "6"
+        },
+        {
+            "country": "India",
+            "state": "Chandigarh",
+            "city": "Chandigarh",
+            "station": "Sector-25, Chandigarh - CPCC",
+            "last_update": "31-08-2026 15:00:00",
+            "latitude": "30.751462",
+            "longitude": "76.762879",
+            "pollutant_id": "NO2",
+            "min_value": "3",
+            "max_value": "32",
+            "avg_value": "12"
+        },
+        {
+            "country": "India",
+            "state": "Chandigarh",
+            "city": "Chandigarh",
+            "station": "Sector-25, Chandigarh - CPCC",
+            "last_update": "31-08-2026 15:00:00",
+            "latitude": "30.751462",
+            "longitude": "76.762879",
+            "pollutant_id": "SO2",
+            "min_value": "4",
+            "max_value": "9",
+            "avg_value": "7"
+        },
+        {
+            "country": "India",
+            "state": "Chandigarh",
+            "city": "Chandigarh",
+            "station": "Sector-53, Chandigarh - CPCC",
+            "last_update": "31-08-2026 15:00:00",
+            "latitude": "30.719859",
+            "longitude": "76.738637",
+            "pollutant_id": "SO2",
+            "min_value": "NA",
+            "max_value": "NA",
+            "avg_value": "NA"
+        },
+        {
+            "country": "India",
+            "state": "Chhattisgarh",
+            "city": "Bhilai",
+            "station": "Civic Center, Bhilai - Bhilai Steel Plant",
+            "last_update": "31-08-2026 15:00:00",
+            "latitude": "21.185571",
+            "longitude": "81.343175",
+            "pollutant_id": "CO",
+            "min_value": "20",
+            "max_value": "21",
+            "avg_value": "21"
+        },
+        {
+            "country": "India",
+            "state": "Chhattisgarh",
+            "city": "Bhilai",
+            "station": "Hathkhoj, Bhilai - CECB",
+            "last_update": "31-08-2026 15:00:00",
+            "latitude": "21.224231",
+            "longitude": "81.40835",
+            "pollutant_id": "PM2.5",
+            "min_value": "29",
+            "max_value": "40",
+            "avg_value": "34"
+        },
+        {
+            "country": "India",
+            "state": "Chhattisgarh",
+            "city": "Bhilai",
+            "station": "Hathkhoj, Bhilai - CECB",
+            "last_update": "31-08-2026 15:00:00",
+            "latitude": "21.224231",
+            "longitude": "81.40835",
+            "pollutant_id": "PM10",
+            "min_value": "25",
+            "max_value": "42",
+            "avg_value": "31"
+        },
+        {
+            "country": "India",
+            "state": "Chhattisgarh",
+            "city": "Bhilai",
+            "station": "Hathkhoj, Bhilai - CECB",
+            "last_update": "31-08-2026 15:00:00",
+            "latitude": "21.224231",
+            "longitude": "81.40835",
+            "pollutant_id": "NO2",
+            "min_value": "12",
+            "max_value": "34",
+            "avg_value": "21"
+        },
+        {
+            "country": "India",
+            "state": "Chhattisgarh",
+            "city": "Bhilai",
+            "station": "Hathkhoj, Bhilai - CECB",
+            "last_update": "31-08-2026 15:00:00",
+            "latitude": "21.224231",
+            "longitude": "81.40835",
+            "pollutant_id": "NH3",
+            "min_value": "6",
+            "max_value": "11",
+            "avg_value": "9"
+        }
+    ]
+}

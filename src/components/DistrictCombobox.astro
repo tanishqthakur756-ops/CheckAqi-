@@ -1,0 +1,162 @@
+---
+/**
+ * Searchable Combobox Component for District Selection in Dashboard
+ * Replaces standard HTML select with an interactive, searchable combobox.
+ */
+import type { DistrictListItem } from "../lib/types";
+
+interface Props {
+  districts: DistrictListItem[];
+  initialDistrictId: string;
+}
+
+const { districts, initialDistrictId } = Astro.props as Props;
+const initialDistrict = districts.find((d) => d.district_id === initialDistrictId) || districts[0];
+---
+
+<div class="relative w-full" data-district-combobox>
+  <!-- Trigger Button / Search Input -->
+  <div class="relative">
+    <input
+      type="text"
+      data-combobox-input
+      value={initialDistrict ? `${initialDistrict.name}, ${initialDistrict.state}` : ""}
+      placeholder="Type to search district..."
+      class="input w-full pr-10 cursor-pointer font-medium"
+      autocomplete="off"
+    />
+    <div class="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-muted">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <polyline points="6 9 12 15 18 9"></polyline>
+      </svg>
+    </div>
+  </div>
+
+  <!-- Hidden standard select to preserve backward compatibility with existing Dashboard JS -->
+  <select id="district-select" data-district-select class="hidden">
+    {
+      districts.map((d) => (
+        <option value={d.district_id} selected={d.district_id === initialDistrictId}>
+          {d.name}, {d.state}
+        </option>
+      ))
+    }
+  </select>
+
+  <!-- Dropdown List Container -->
+  <div
+    data-combobox-dropdown
+    class="absolute left-0 right-0 top-full mt-1.5 z-40 hidden max-h-72 overflow-y-auto bg-canvas border hairline shadow-xl rounded-lg p-1.5"
+  >
+    <div data-combobox-list class="flex flex-col gap-0.5">
+      {
+        districts.map((d) => (
+          <button
+            type="button"
+            data-combobox-option={d.district_id}
+            data-combobox-label={`${d.name}, ${d.state}`}
+            class={`w-full text-left px-3 py-2 text-sm rounded-md flex items-center justify-between transition-colors ${
+              d.district_id === initialDistrictId
+                ? "bg-surface-card text-ink font-medium"
+                : "hover:bg-surface-soft text-body"
+            }`}
+          >
+            <div>
+              <span class="font-medium text-ink">{d.name}</span>
+              <span class="text-xs text-muted ml-1.5">{d.state}</span>
+            </div>
+            {d.latest_aqi != null ? (
+              <span class="badge font-mono text-[11px] bg-surface-soft text-ink">
+                AQI {Math.round(d.latest_aqi)}
+              </span>
+            ) : (
+              <span class="text-xs text-muted-soft">no data</span>
+            )}
+          </button>
+        ))
+      }
+    </div>
+  </div>
+</div>
+
+<script>
+  const root = document.querySelector<HTMLElement>("[data-district-combobox]");
+  if (root) {
+    const input = root.querySelector<HTMLInputElement>("[data-combobox-input]");
+    const dropdown = root.querySelector<HTMLElement>("[data-combobox-dropdown]");
+    const select = root.querySelector<HTMLSelectElement>("[data-district-select]");
+    const options = root.querySelectorAll<HTMLButtonElement>("[data-combobox-option]");
+
+    function openDropdown() {
+      dropdown?.classList.remove("hidden");
+    }
+
+    function closeDropdown() {
+      dropdown?.classList.add("hidden");
+    }
+
+    function selectOption(id: string, label: string) {
+      if (input) input.value = label;
+      if (select) {
+        select.value = id;
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+
+      options.forEach((opt) => {
+        const isMatch = opt.getAttribute("data-combobox-option") === id;
+        opt.classList.toggle("bg-surface-card", isMatch);
+        opt.classList.toggle("font-medium", isMatch);
+      });
+
+      window.dispatchEvent(
+        new CustomEvent("district:select", { detail: { id } }),
+      );
+      closeDropdown();
+    }
+
+    input?.addEventListener("focus", () => {
+      openDropdown();
+      input.select();
+    });
+
+    input?.addEventListener("input", () => {
+      openDropdown();
+      const q = input.value.trim().toLowerCase();
+      options.forEach((opt) => {
+        const label = (opt.getAttribute("data-combobox-label") || "").toLowerCase();
+        if (!q || label.includes(q)) {
+          opt.style.display = "";
+        } else {
+          opt.style.display = "none";
+        }
+      });
+    });
+
+    options.forEach((opt) => {
+      opt.addEventListener("click", () => {
+        const id = opt.getAttribute("data-combobox-option");
+        const label = opt.getAttribute("data-combobox-label");
+        if (id && label) selectOption(id, label);
+      });
+    });
+
+    // Close when clicking outside
+    document.addEventListener("click", (e) => {
+      if (!root.contains(e.target as Node)) {
+        closeDropdown();
+      }
+    });
+
+    // Sync if district is selected from Map or URL
+    window.addEventListener("district:select", (e) => {
+      const id = (e as CustomEvent<{ id: string }>).detail.id;
+      const targetOpt = Array.from(options).find(
+        (opt) => opt.getAttribute("data-combobox-option") === id,
+      );
+      if (targetOpt && input) {
+        input.value = targetOpt.getAttribute("data-combobox-label") || "";
+      }
+    });
+  }
+</script>
+

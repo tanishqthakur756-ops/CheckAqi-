@@ -1,0 +1,561 @@
+---
+import Layout from "../layouts/Layout.astro";
+import AqiDisplay from "../components/AqiDisplay.astro";
+import Stat from "../components/Stat.astro";
+import AqiGauge from "../components/AqiGauge.astro";
+import RankingsTable from "../components/RankingsTable.astro";
+import DistrictComparer from "../components/DistrictComparer.astro";
+import { loadDistricts, loadSources } from "../lib/loaders";
+import { categoryFromAqi } from "../lib/aqi";
+
+const districts = (await loadDistricts()).data;
+const sources = (await loadSources()).data;
+
+const sorted = [...districts].sort((a, b) => {
+  if (a.latest_aqi == null && b.latest_aqi == null) return 0;
+  if (a.latest_aqi == null) return 1;
+  if (b.latest_aqi == null) return -1;
+  return b.latest_aqi - a.latest_aqi;
+});
+const withData = sorted.filter((d) => d.latest_aqi != null);
+const top = withData.slice(0, 6);
+const worst = withData[0];
+const best = withData[withData.length - 1];
+const states = new Set(districts.map((d) => d.state));
+const stations = withData.length;
+const latestDate = withData
+  .map((d) => d.latest_date)
+  .filter((date): date is string => date != null)
+  .sort()
+  .at(-1) ?? "—";
+
+const cat = worst ? categoryFromAqi(worst.latest_aqi) : "Unknown";
+
+const sourceLabel =
+  sources.length > 3
+    ? `${sources.slice(0, 3).map((s) => s.source_name.split(" ")[0]).join(", ")} + ${sources.length - 3} External APIs`
+    : sources.map((s) => s.source_name).join(" + ") || "open data";
+---
+
+<Layout
+  title="India AQI-Weather Tracker"
+  description="A real-time, district-level air quality and weather tracker for India. Live AQI, seasonal patterns and weather correlations from CPCB, Open-Meteo and IMD."
+>
+  <!-- HERO -->
+  <section class="container-prose section-pad hero-section">
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
+      <div class="lg:col-span-7">
+        <div class="flex items-center gap-2 mb-6">
+          <span class="badge badge-coral">Beta · {withData.length} districts live</span>
+          <span class="badge badge-muted" style="text-transform:none; letter-spacing:0;">
+            Latest reading {latestDate}
+          </span>
+        </div>
+        <h1 class="display-xl max-w-3xl">
+          The air your district is breathing, <em>today</em>.
+        </h1>
+        <p class="text-body text-lg mt-6 max-w-xl">
+          A district-level view of pollution and weather across India,
+          grounded in open data from {sourceLabel}. No login, no ads —
+          just the AQI, the history, and the weather correlations.
+        </p>
+        <div class="flex flex-wrap gap-3 mt-8">
+          <a href="/dashboard" class="btn btn-primary">
+            Open the dashboard
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+              <polyline points="12 5 19 12 12 19"></polyline>
+            </svg>
+          </a>
+          <a href="/districts" class="btn btn-secondary">Browse districts</a>
+          <a href="/sources" class="btn btn-link">See data sources</a>
+        </div>
+
+        <dl
+          class="mt-12 grid grid-cols-2 sm:grid-cols-4 gap-6 max-w-2xl"
+        >
+          <Stat
+            label="Districts covered"
+            value={districts.length}
+            hint="LGD-coded centroids"
+          />
+          <Stat
+            label="States + UTs"
+            value={states.size}
+            hint="All regions of India"
+          />
+          <Stat
+            label="Live readings"
+            value={stations}
+            hint="From CPCB stations"
+          />
+          <Stat
+            label="Data sources"
+            value={sources.length || 3}
+            hint="Open + free"
+          />
+        </dl>
+      </div>
+
+      <div class="lg:col-span-5">
+        <div class="card-coral flex flex-col gap-6">
+          <div>
+            <span
+              class="badge"
+              style="background:rgba(255,255,255,0.18); color:#fff; text-transform:uppercase; letter-spacing:0.08em;"
+            >
+              Worst today
+            </span>
+            <h2 class="display-md mt-3" style="color:#fff;">
+              {worst?.name ?? "—"}
+            </h2>
+            <p style="color:rgba(255,255,255,0.85);" class="mt-1">
+              {worst?.state ?? ""}
+            </p>
+          </div>
+          <AqiGauge
+            aqi={worst?.latest_aqi ?? null}
+            size={220}
+            label="Current AQI"
+          />
+          <p
+            class="text-sm"
+            style="color:rgba(255,255,255,0.9); max-width:32ch;"
+          >
+            {cat === "Severe" || cat === "Very Poor"
+              ? "Avoid outdoor activity. Sensitive groups should stay indoors."
+              : cat === "Poor"
+                ? "Limit prolonged outdoor exertion today."
+                : "Air quality is acceptable for most people."}
+          </p>
+            <div class="hero-pulse" aria-label="Network pulse">
+              <div>
+                <span>Cleanest today</span>
+                <strong>{best?.name ?? "—"}</strong>
+              </div>
+              <div>
+                <span>Network coverage</span>
+                <strong>{states.size} states + UTs</strong>
+              </div>
+              <div>
+                <span>Reading date</span>
+                <strong>{worst?.latest_date ?? "—"}</strong>
+              </div>
+            </div>
+          <a
+            href={`/districts/${worst?.district_id ?? ""}`}
+              class="btn btn-coral-inverse self-start hero-detail-link"
+          >
+            See {worst?.name ?? "district"} detail
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TOP DISTRICTS -->
+  <section class="container-prose section-pad">
+    <div class="flex items-end justify-between gap-4 mb-8 flex-wrap">
+      <div>
+        <span class="badge badge-coral mb-3">Now</span>
+        <h2 class="display-lg max-w-2xl">Highest AQI districts right now</h2>
+        <p class="text-body mt-2 max-w-2xl">
+          The six worst air-quality readings in our network today. Tap
+          any district for full history and weather correlations.
+        </p>
+      </div>
+      <a href="/dashboard" class="btn btn-link">All districts →</a>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      {
+        top.map((d, i) => {
+          return (
+            <a
+              href={`/districts/${d.district_id}`}
+              class="card-canvas group block"
+              style="text-decoration:none;"
+            >
+              <div class="flex items-baseline justify-between gap-2">
+                <span
+                  class="badge"
+                  style="background:var(--color-canvas); color:var(--color-muted);"
+                >
+                  #{i + 1}
+                </span>
+                <span
+                  class="text-sm text-muted"
+                  style="font-weight:500;"
+                >
+                  {d.latest_date ?? "—"}
+                </span>
+              </div>
+              <h3 class="display-sm mt-3" style="font-size:22px;">
+                {d.name}
+              </h3>
+              <p class="text-sm text-muted mt-1">{d.state}</p>
+              <div class="mt-4">
+                <AqiDisplay aqi={d.latest_aqi} size="md" />
+              </div>
+              <div
+                class="mt-4 inline-flex items-center gap-1 text-sm"
+                style="color:var(--color-primary); font-weight:500;"
+              >
+                Open detail
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                  <polyline points="12 5 19 12 12 19"></polyline>
+                </svg>
+              </div>
+            </a>
+          );
+        })
+      }
+    </div>
+  </section>
+
+  <!-- LIVE CITY RANKINGS LEADERBOARD -->
+  <section class="container-prose section-pad" style="padding-top:0;">
+    <RankingsTable districts={districts} />
+  </section>
+
+  <!-- SIDE BY SIDE DISTRICT COMPARER -->
+  <section class="container-prose section-pad" style="padding-top:0;">
+    <DistrictComparer districts={districts} />
+  </section>
+
+  <!-- HOW IT WORKS (DARK) -->
+  <section class="bg-surface-dark text-on-dark section-pad">
+    <div class="container-prose">
+      <div class="max-w-2xl">
+        <span
+          class="badge badge-dark"
+          style="background:rgba(255,255,255,0.06); color:var(--color-on-dark-soft);"
+        >
+          How it works
+        </span>
+        <h2 class="display-lg mt-3" style="color:var(--color-on-dark);">
+          Three open sources, one consistent number.
+        </h2>
+        <p
+          class="mt-4"
+          style="color:var(--color-on-dark-soft); font-size:18px; line-height:1.6;"
+        >
+          We pull the freshest available readings from CPCB stations, fill
+          the weather context from Open-Meteo, and apply IMD's seasonal
+          calendar to the analysis. The math runs through the official
+          CPCB breakpoint tables.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-10">
+        <div
+          class="p-6 rounded-lg"
+          style="background:var(--color-surface-dark-elevated); border:1px solid #2a2723;"
+        >
+          <div
+            class="text-xs uppercase tracking-widest"
+            style="color:var(--color-on-dark-soft); font-weight:500;"
+          >
+            01 · Ingestion
+          </div>
+          <h3
+            class="display-sm mt-3"
+            style="color:var(--color-on-dark); font-size:24px;"
+          >
+            Pull daily station readings
+          </h3>
+          <p
+            class="mt-3"
+            style="color:var(--color-on-dark-soft); font-size:15px; line-height:1.6;"
+          >
+            Every morning we download the previous day's CPCB observations
+            for each station in the network and attach Open-Meteo weather
+            for the same district.
+          </p>
+        </div>
+        <div
+          class="p-6 rounded-lg"
+          style="background:var(--color-surface-dark-elevated); border:1px solid #2a2723;"
+        >
+          <div
+            class="text-xs uppercase tracking-widest"
+            style="color:var(--color-on-dark-soft); font-weight:500;"
+          >
+            02 · AQI math
+          </div>
+          <h3
+            class="display-sm mt-3"
+            style="color:var(--color-on-dark); font-size:24px;"
+          >
+            Apply CPCB breakpoints
+          </h3>
+          <p
+            class="mt-3"
+            style="color:var(--color-on-dark-soft); font-size:15px; line-height:1.6;"
+          >
+            For every reading we compute sub-indices per pollutant using
+            the official National AQI series and take the worst-case as
+            the headline AQI.
+          </p>
+        </div>
+        <div
+          class="p-6 rounded-lg"
+          style="background:var(--color-surface-dark-elevated); border:1px solid #2a2723;"
+        >
+          <div
+            class="text-xs uppercase tracking-widest"
+            style="color:var(--color-on-dark-soft); font-weight:500;"
+          >
+            03 · Analysis
+          </div>
+          <h3
+            class="display-sm mt-3"
+            style="color:var(--color-on-dark); font-size:24px;"
+          >
+            Roll up + correlate
+          </h3>
+          <p
+            class="mt-3"
+            style="color:var(--color-on-dark-soft); font-size:15px; line-height:1.6;"
+          >
+            Station readings roll up to a daily district average. We
+            compute Pearson <em>r</em> between AQI and weather, and tag
+            each day with its IMD season.
+          </p>
+        </div>
+      </div>
+
+      <!-- A code-window mockup on the dark surface -->
+      <div
+        class="mt-10 rounded-lg overflow-hidden"
+        style="background:var(--color-surface-dark-soft); border:1px solid #2a2723;"
+      >
+        <div
+          class="flex items-center justify-between gap-2 px-4 py-2"
+          style="background:var(--color-surface-dark-elevated); border-bottom:1px solid #2a2723;"
+        >
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full" style="background:#ff5f56;"></span>
+            <span class="w-2.5 h-2.5 rounded-full" style="background:#ffbd2e;"></span>
+            <span class="w-2.5 h-2.5 rounded-full" style="background:#27c93f;"></span>
+          </div>
+          <span
+            class="text-xs"
+            style="color:var(--color-on-dark-soft); font-family: var(--font-mono);"
+          >
+            aqi_calculator.py
+          </span>
+          <span class="w-12"></span>
+        </div>
+        <pre
+          class="m-0 p-6 text-sm overflow-x-auto"
+          style="color:var(--color-on-dark); font-family: var(--font-mono); line-height:1.6; font-size:13px;"
+       ><code><span style="color:#a09d96;"># Headline AQI for one station on one day</span>
+<span style="color:#cc785c;">def</span> <span style="color:#5db8a6;">compute_station_aqi</span>(readings):
+    sub = {}
+    <span style="color:#cc785c;">for</span> pollutant, value <span style="color:#cc785c;">in</span> readings.items():
+        sub[pollutant] = sub_index(pollutant, value)
+    worst = <span style="color:#5db8a6;">max</span>(sub.values(), key=<span style="color:#5db8a6;">lambda</span> x: x.aqi)
+    <span style="color:#cc785c;">return</span> &#123;
+        <span style="color:#e8a55a;">"aqi"</span>: worst.aqi,
+        <span style="color:#e8a55a;">"category"</span>: worst.category,
+        <span style="color:#e8a55a;">"driver"</span>: worst.pollutant,
+        <span style="color:#e8a55a;">"is_cpcb_compliant"</span>: <span style="color:#5db8a6;">len</span>(sub) &gt;= <span style="color:#a9583e;">3</span>,
+    &#125;</code></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- FEATURE GRID -->
+  <section class="container-prose section-pad">
+    <div class="max-w-2xl mb-10">
+      <span class="badge badge-coral mb-3">What you get</span>
+      <h2 class="display-lg">A dashboard, a map, and a year of context.</h2>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="card">
+        <div
+          class="w-10 h-10 rounded-md flex items-center justify-center"
+          style="background:var(--color-canvas);"
+        >
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="var(--color-primary)"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M3 3v18h18"></path>
+            <path d="M7 14l4-4 4 4 5-5"></path>
+          </svg>
+        </div>
+        <h3 class="display-sm mt-5" style="font-size:24px;">A year of history</h3>
+        <p class="text-body mt-3">
+          Daily AQI averages, maxes, and weather, plotted together. Spot
+          the seasons, spot the spikes.
+        </p>
+      </div>
+      <div class="card">
+        <div
+          class="w-10 h-10 rounded-md flex items-center justify-center"
+          style="background:var(--color-canvas);"
+        >
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="var(--color-primary)"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <circle cx="12" cy="12" r="10"></circle>
+            <path d="M12 6v6l4 2"></path>
+          </svg>
+        </div>
+        <h3 class="display-sm mt-5" style="font-size:24px;">Seasonal pattern</h3>
+        <p class="text-body mt-3">
+          Average AQI per IMD season, derived from the full history of
+          the district. Winter is the killer in the north; monsoon cleans
+          the air everywhere.
+        </p>
+      </div>
+      <div class="card">
+        <div
+          class="w-10 h-10 rounded-md flex items-center justify-center"
+          style="background:var(--color-canvas);"
+        >
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="var(--color-primary)"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M3 12h4l3-9 4 18 3-9h4"></path>
+          </svg>
+        </div>
+        <h3 class="display-sm mt-5" style="font-size:24px;">Weather correlation</h3>
+        <p class="text-body mt-3">
+          Pearson <em>r</em> between AQI and wind speed, and between AQI
+          and rainfall. How much does each weather variable move the
+          number for this district?
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- API CTA -->
+  <section class="container-prose section-pad">
+    <div class="card-coral flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+      <div class="max-w-xl">
+        <h2 class="display-md" style="color:#fff;">
+          All of this is a JSON API.
+        </h2>
+        <p style="color:rgba(255,255,255,0.9);" class="mt-3">
+          Every panel on the dashboard is a live endpoint under
+          <code style="font-family: var(--font-mono);">/api/districts</code>.
+          No keys, no rate limits, no scraping.
+        </p>
+      </div>
+      <div class="flex gap-3 flex-wrap">
+        <a href="/sources" class="btn btn-coral-inverse">API reference</a>
+        <a href="/about" class="btn btn-coral-inverse">Methodology</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- BEST/WORST -->
+  {
+    best && best.district_id !== worst?.district_id && (
+      <section class="container-prose section-pad">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="card-canvas">
+            <div
+              class="text-xs uppercase tracking-widest text-muted"
+              style="font-weight:500;"
+            >
+              Cleanest air today
+            </div>
+            <h3 class="display-md mt-3">{best.name}</h3>
+            <p class="text-muted">{best.state}</p>
+            <div class="mt-4">
+              <AqiDisplay aqi={best.latest_aqi} size="md" />
+            </div>
+            <a
+              href={`/districts/${best.district_id}`}
+              class="btn btn-link mt-4 inline-flex"
+            >
+              Open {best.name} →
+            </a>
+          </div>
+          <div class="card-coral">
+            <div
+              class="text-xs uppercase tracking-widest"
+              style="color:rgba(255,255,255,0.85); font-weight:500;"
+            >
+              Worst in the network
+            </div>
+            <h3 class="display-md mt-3" style="color:#fff;">
+              {worst?.name}
+            </h3>
+            <p style="color:rgba(255,255,255,0.85);">{worst?.state}</p>
+            <div class="mt-4 flex items-baseline gap-3">
+              <span
+                class="display"
+                style={`font-size:48px; line-height:1; color:#fff;`}
+              >
+                {worst?.latest_aqi != null
+                  ? Math.round(worst.latest_aqi)
+                  : "—"}
+              </span>
+              <span
+                class="badge"
+                style="background:rgba(255,255,255,0.2); color:#fff;"
+              >
+                {categoryFromAqi(worst?.latest_aqi ?? null)}
+              </span>
+            </div>
+            <a
+              href={`/districts/${worst?.district_id}`}
+              class="btn btn-coral-inverse mt-4 inline-flex"
+            >
+              Open {worst?.name} →
+            </a>
+          </div>
+        </div>
+      </section>
+    )
+  }
+</Layout>

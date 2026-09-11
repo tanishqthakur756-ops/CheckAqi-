@@ -1,0 +1,227 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import AqiDisplay from "../../components/AqiDisplay.astro";
+import AqiGauge from "../../components/AqiGauge.astro";
+import HistoryChart from "../../components/HistoryChart.astro";
+import SeasonalGrid from "../../components/SeasonalGrid.astro";
+import CorrelationChart from "../../components/CorrelationChart.astro";
+import {
+  loadCorrelation,
+  loadDistrict,
+  loadDistricts,
+  loadHistory,
+} from "../../lib/loaders";
+import {
+  categoryDescription,
+  categoryFromAqi,
+  healthAdvice,
+} from "../../lib/aqi";
+
+export async function getStaticPaths() {
+  // Pre-render the bundled sample districts so the build always succeeds
+  // and search engines can crawl the canonical URLs. New IDs (added by
+  // the live API later) still resolve at runtime via the adapter.
+  const districts = (await loadDistricts()).data;
+  return districts.map((d) => ({ params: { id: d.district_id } }));
+}
+
+const { id } = Astro.params as { id: string };
+
+const detail = (await loadDistrict(id ?? ""))?.data ?? null;
+if (!detail) {
+  return Astro.redirect("/districts");
+}
+
+const history = (await loadHistory(detail.meta.district_id, "1y"))?.data ?? null;
+const correlation =
+  (await loadCorrelation(detail.meta.district_id))?.data ?? null;
+
+const latest = history?.data?.[history.data.length - 1] ?? null;
+const aqi = latest?.avg_aqi ?? null;
+const cat = categoryFromAqi(aqi);
+const advice = healthAdvice(cat);
+const desc = categoryDescription(cat);
+
+const years = (() => {
+  if (!history?.data?.length) return 0;
+  const first = new Date(history.data[0].date);
+  const last = new Date(history.data[history.data.length - 1].date);
+  return Math.max(1, Math.round((last.getTime() - first.getTime()) / 31536000000));
+})();
+---
+
+<Layout
+  title={`${detail.meta.name} — AQI`}
+  description={`Live AQI, history, seasonal pattern and weather correlations for ${detail.meta.name}, ${detail.meta.state}.`}
+>
+  <section class="container-prose section-pad">
+    <nav class="text-sm text-muted mb-4 flex items-center gap-2 flex-wrap" aria-label="Breadcrumb">
+      <a href="/" class="text-link">Home</a>
+      <span>›</span>
+      <a href="/districts" class="text-link">Districts</a>
+      <span>›</span>
+      <span style="color:var(--color-ink);">{detail.meta.name}</span>
+    </nav>
+
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div class="lg:col-span-7 card-canvas">
+        <div class="flex flex-col md:flex-row md:items-center gap-6">
+          <div class="flex-1">
+            <span class="badge badge-muted mb-3" style="text-transform:none; letter-spacing:0;">
+              {detail.meta.state}
+            </span>
+            <h1 class="display-lg" style="margin-top:0;">{detail.meta.name}</h1>
+            <p class="text-muted mt-1">
+              {detail.active_station_count} active CPCB station
+              {detail.active_station_count === 1 ? "" : "s"}
+            </p>
+            <div class="mt-4">
+              <AqiDisplay aqi={aqi} size="lg" />
+            </div>
+            <p class="text-body mt-3 max-w-md">{desc}</p>
+          </div>
+          <div>
+            <AqiGauge aqi={aqi} size={200} />
+          </div>
+        </div>
+
+        <div
+          class="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-4 pt-6"
+          style="border-top: 1px solid var(--color-hairline-soft);"
+        >
+          <div>
+            <div class="text-xs uppercase tracking-widest text-muted" style="font-weight:500;">Peak (1y)</div>
+            <div class="display-sm" style="font-size:24px; margin-top:2px;">
+              {latest?.max_aqi != null ? Math.round(latest.max_aqi) : "—"}
+            </div>
+          </div>
+          <div>
+            <div class="text-xs uppercase tracking-widest text-muted" style="font-weight:500;">Stations</div>
+            <div class="display-sm" style="font-size:24px; margin-top:2px;">
+              {detail.active_station_count}
+            </div>
+          </div>
+          <div>
+            <div class="text-xs uppercase tracking-widest text-muted" style="font-weight:500;">Last update</div>
+            <div class="display-sm" style="font-size:18px; margin-top:4px;">
+              {latest?.date ?? "—"}
+            </div>
+          </div>
+          <div>
+            <div class="text-xs uppercase tracking-widest text-muted" style="font-weight:500;">Coverage</div>
+            <div class="display-sm" style="font-size:18px; margin-top:4px; text-transform: capitalize;">
+              {latest?.coverage_type?.replace("_", " ") ?? "—"}
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-6 flex flex-wrap gap-2">
+          {advice.map((a) => (
+            <span class="badge badge-muted" style="text-transform:none; letter-spacing:0;">
+              {a}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <div class="lg:col-span-5 card">
+        <h2 class="display-sm" style="font-size:24px;">Latest conditions</h2>
+        <p class="text-sm text-muted mt-1">From the most recent rollup</p>
+        <dl class="mt-5 grid grid-cols-2 gap-y-4 gap-x-6">
+          <div>
+            <dt class="text-xs uppercase tracking-widest text-muted" style="font-weight:500;">Temperature</dt>
+            <dd class="display-sm" style="font-size:24px;">
+              {latest?.avg_temp != null ? `${latest.avg_temp.toFixed(1)}°C` : "—"}
+            </dd>
+          </div>
+          <div>
+            <dt class="text-xs uppercase tracking-widest text-muted" style="font-weight:500;">Rainfall</dt>
+            <dd class="display-sm" style="font-size:24px;">
+              {latest?.avg_rainfall != null ? `${latest.avg_rainfall.toFixed(1)} mm` : "—"}
+            </dd>
+          </div>
+          <div>
+            <dt class="text-xs uppercase tracking-widest text-muted" style="font-weight:500;">Wind</dt>
+            <dd class="display-sm" style="font-size:24px;">
+              {latest?.avg_wind != null ? `${latest.avg_wind.toFixed(1)} km/h` : "—"}
+            </dd>
+          </div>
+          <div>
+            <dt class="text-xs uppercase tracking-widest text-muted" style="font-weight:500;">Season</dt>
+            <dd class="display-sm" style="font-size:24px; text-transform: capitalize;">
+              {latest?.season?.replace("_", "-") ?? "—"}
+            </dd>
+          </div>
+        </dl>
+        <div
+          class="mt-6 p-4 rounded-md"
+          style="background:var(--color-canvas); border:1px solid var(--color-hairline-soft);"
+        >
+          <p class="text-sm text-body">
+            <span class="font-medium" style="color:var(--color-ink);">Coordinates</span>
+            <br />
+            {detail.meta.latitude?.toFixed(3)}°N, {detail.meta.longitude?.toFixed(3)}°E
+            <br />
+            <span class="text-muted-soft">LGD code: {detail.meta.lgd_code ?? "—"}</span>
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="container-prose section-pad" style="padding-top:0;">
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div class="lg:col-span-8 card-canvas">
+        <div class="flex items-baseline justify-between gap-3 mb-2 flex-wrap">
+          <h2 class="display-md" style="font-size:24px;">AQI history</h2>
+          <span class="badge badge-muted" style="text-transform:none; letter-spacing:0;">
+            Last {years} year{years === 1 ? "" : "s"}
+          </span>
+        </div>
+        {
+          history?.data?.length ? (
+            <HistoryChart data={history.data} height={300} />
+          ) : (
+            <div class="py-12 text-center text-muted">
+              No history yet for this district.
+            </div>
+          )
+        }
+      </div>
+      <div class="lg:col-span-4 card">
+        <h2 class="display-sm" style="font-size:24px;">Seasonal pattern</h2>
+        <p class="text-sm text-muted mt-1 mb-4">
+          Average AQI by IMD season over the last {years} year{years === 1 ? "" : "s"}.
+        </p>
+        <SeasonalGrid data={correlation?.seasonal_pattern ?? null} />
+      </div>
+    </div>
+  </section>
+
+  <section class="container-prose section-pad" style="padding-top:0;">
+    <div class="card-canvas">
+      <h2 class="display-md" style="font-size:24px;">Weather correlation</h2>
+      <p class="text-sm text-muted mt-1 mb-5 max-w-2xl">
+        Pearson <em>r</em> between AQI and the named weather variable.
+        Negative = pollution drops when that variable rises.
+      </p>
+      <CorrelationChart data={correlation ?? null} />
+    </div>
+  </section>
+
+  <section class="container-prose section-pad" style="padding-top:0;">
+    <div class="card-coral flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div class="max-w-xl">
+        <h2 class="display-md" style="color:#fff; font-size:24px;">
+          Want the full interactive view?
+        </h2>
+        <p style="color:rgba(255,255,255,0.9);" class="mt-2">
+          Switch between districts, ranges and metrics in real time.
+        </p>
+      </div>
+      <a href={`/dashboard?district=${detail.meta.district_id}`} class="btn btn-coral-inverse">
+        Open {detail.meta.name} in dashboard
+      </a>
+    </div>
+  </section>
+</Layout>

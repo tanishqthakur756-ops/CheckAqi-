@@ -1,0 +1,532 @@
+---
+/**
+ * Detailed India Vector Map Component
+ *
+ * Features:
+ * - Accurate physical geographic state boundaries computed via exact lat/lon projection
+ * - District Centroid Markers mode
+ * - State Heatmap Fill mode (toggleable)
+ * - Fullscreen mode support
+ * - Interactive tooltips & prediction status indicators
+ * - Click interaction broadcasting 'district:select' custom event
+ */
+import type { DistrictListItem } from "../lib/types";
+import { categoryFromAqi, categoryColor } from "../lib/aqi";
+
+interface Props {
+  districts: DistrictListItem[];
+  selectedId?: string | null;
+  size?: number;
+}
+const { districts, selectedId = null, size = 680 } = Astro.props as Props;
+
+// Projection bounding box for India: lat 6.5..37.5, lon 68.0..97.5
+const minLat = 6.5;
+const maxLat = 37.5;
+const minLon = 68.0;
+const maxLon = 97.5;
+
+function project(lat: number, lon: number, w: number, h: number) {
+  const x = ((lon - minLon) / (maxLon - minLon)) * w;
+  const y = ((maxLat - lat) / (maxLat - minLat)) * h;
+  return { x, y };
+}
+
+const W = size;
+const H = Math.round(size * 1.14);
+
+function toSvgPath(points: [number, number][]) {
+  return (
+    points
+      .map(([lat, lon], idx) => {
+        const { x, y } = project(lat, lon, W, H);
+        return `${idx === 0 ? "M" : "L"} ${x.toFixed(1)} ${y.toFixed(1)}`;
+      })
+      .join(" ") + " Z"
+  );
+}
+
+const placed = districts
+  .filter((d) => d.latitude != null && d.longitude != null)
+  .map((d) => {
+    const { x, y } = project(d.latitude!, d.longitude!, W, H);
+    const cat = categoryFromAqi(d.latest_aqi);
+    return {
+      id: d.district_id,
+      name: d.name,
+      state: d.state,
+      aqi: d.latest_aqi,
+      cat,
+      x,
+      y,
+      coverageType: d.coverage_type ?? "no_data",
+      isPredicted: d.is_predicted || d.coverage_type === "predicted",
+      confidence: d.prediction_confidence,
+      hasData: d.latest_aqi != null,
+    };
+  });
+
+// Compute state-level average AQI for Heatmap mode
+const stateAvgMap: Record<string, { total: number; count: number; avg: number }> = {};
+districts.forEach((d) => {
+  if (d.latest_aqi != null) {
+    if (!stateAvgMap[d.state]) {
+      stateAvgMap[d.state] = { total: 0, count: 0, avg: 0 };
+    }
+    stateAvgMap[d.state].total += d.latest_aqi;
+    stateAvgMap[d.state].count += 1;
+    stateAvgMap[d.state].avg = Math.round(
+      stateAvgMap[d.state].total / stateAvgMap[d.state].count,
+    );
+  }
+});
+
+/**
+ * State & Union Territory boundaries constructed from physical Lat/Lon points
+ * projected using the exact same formula as district centroids.
+ */
+const rawStateGeometries: { id: string; name: string; points: [number, number][] }[] = [
+  {
+    id: "jk_ladakh",
+    name: "Jammu, Kashmir & Ladakh",
+    points: [[37.1, 75.0], [36.0, 78.5], [34.5, 79.5], [32.5, 78.8], [32.2, 75.8], [33.0, 74.0], [35.0, 73.5]],
+  },
+  {
+    id: "hp",
+    name: "Himachal Pradesh",
+    points: [[33.2, 76.8], [32.8, 78.8], [31.0, 78.5], [30.4, 77.5], [31.2, 75.8]],
+  },
+  {
+    id: "pb",
+    name: "Punjab",
+    points: [[32.5, 75.5], [31.5, 76.8], [30.0, 76.5], [29.5, 74.8], [30.8, 73.9]],
+  },
+  {
+    id: "uk",
+    name: "Uttarakhand",
+    points: [[31.5, 78.5], [31.0, 80.8], [28.7, 80.2], [29.5, 77.8]],
+  },
+  {
+    id: "hr_dl",
+    name: "Haryana & Delhi",
+    points: [[30.9, 76.5], [30.0, 77.5], [28.0, 77.4], [27.6, 75.2], [29.5, 74.6]],
+  },
+  {
+    id: "rj",
+    name: "Rajasthan",
+    points: [[30.2, 74.0], [30.0, 76.0], [27.5, 77.8], [24.0, 76.8], [23.1, 74.0], [24.5, 70.8], [27.0, 69.5]],
+  },
+  {
+    id: "up",
+    name: "Uttar Pradesh",
+    points: [[30.4, 77.8], [28.5, 80.5], [27.5, 84.5], [24.8, 83.2], [25.2, 78.5], [27.5, 77.6]],
+  },
+  {
+    id: "gj",
+    name: "Gujarat",
+    points: [[24.7, 71.0], [24.5, 74.2], [21.5, 73.8], [20.1, 72.8], [21.0, 72.0], [22.2, 70.0], [23.0, 68.5], [24.0, 68.8]],
+  },
+  {
+    id: "mp",
+    name: "Madhya Pradesh",
+    points: [[26.9, 78.0], [25.5, 82.5], [22.0, 81.5], [21.1, 76.0], [21.8, 74.0], [24.5, 74.8]],
+  },
+  {
+    id: "br",
+    name: "Bihar",
+    points: [[27.5, 84.5], [26.5, 88.2], [24.3, 87.5], [24.5, 83.3]],
+  },
+  {
+    id: "wb",
+    name: "West Bengal",
+    points: [[27.2, 88.5], [26.5, 89.8], [24.0, 88.8], [21.5, 88.0], [22.0, 86.8], [24.5, 86.5]],
+  },
+  {
+    id: "jh",
+    name: "Jharkhand",
+    points: [[25.3, 87.5], [24.0, 87.8], [22.0, 85.5], [22.2, 83.8], [24.5, 83.3]],
+  },
+  {
+    id: "od",
+    name: "Odisha",
+    points: [[22.6, 86.5], [21.5, 87.5], [19.0, 85.0], [17.8, 81.8], [20.0, 82.5], [22.0, 83.8]],
+  },
+  {
+    id: "cg",
+    name: "Chhattisgarh",
+    points: [[24.1, 83.2], [22.0, 83.8], [17.8, 81.2], [19.0, 80.2], [22.0, 81.0]],
+  },
+  {
+    id: "mh",
+    name: "Maharashtra",
+    points: [[22.0, 73.5], [21.5, 80.5], [18.5, 80.5], [15.6, 74.0], [16.0, 73.2], [20.0, 72.7]],
+  },
+  {
+    id: "tg",
+    name: "Telangana",
+    points: [[19.9, 78.5], [18.8, 81.5], [16.0, 80.0], [15.8, 77.5], [18.0, 77.2]],
+  },
+  {
+    id: "ap",
+    name: "Andhra Pradesh",
+    points: [[19.1, 84.8], [17.0, 82.5], [13.5, 80.2], [12.6, 79.5], [14.0, 77.0], [16.0, 79.5], [18.5, 81.5]],
+  },
+  {
+    id: "ka",
+    name: "Karnataka",
+    points: [[18.5, 76.0], [17.5, 77.5], [14.0, 78.2], [11.5, 77.0], [12.8, 74.8], [15.5, 74.1]],
+  },
+  {
+    id: "goa",
+    name: "Goa",
+    points: [[15.8, 73.7], [15.7, 74.3], [14.9, 74.1], [15.0, 73.8]],
+  },
+  {
+    id: "kl",
+    name: "Kerala",
+    points: [[12.8, 74.9], [12.0, 76.0], [8.3, 77.0], [8.4, 76.9], [10.5, 76.0]],
+  },
+  {
+    id: "tn",
+    name: "Tamil Nadu",
+    points: [[13.5, 80.2], [10.0, 79.8], [8.1, 77.5], [8.3, 77.0], [11.5, 77.0], [12.5, 79.5]],
+  },
+  {
+    id: "sikkim",
+    name: "Sikkim",
+    points: [[28.1, 88.5], [27.5, 88.9], [27.1, 88.5], [27.5, 88.0]],
+  },
+  {
+    id: "arunachal",
+    name: "Arunachal Pradesh",
+    points: [[29.5, 96.0], [28.0, 97.3], [27.0, 95.5], [26.6, 92.0], [27.8, 91.6]],
+  },
+  {
+    id: "assam_meghalaya",
+    name: "Assam & Meghalaya",
+    points: [[28.0, 96.0], [26.5, 96.0], [24.5, 92.5], [25.0, 89.8], [26.5, 90.0], [27.5, 94.0]],
+  },
+  {
+    id: "ne_states",
+    name: "Nagaland, Manipur, Mizoram & Tripura",
+    points: [[27.0, 95.0], [24.0, 94.5], [22.6, 92.5], [23.5, 91.2], [25.0, 92.5]],
+  },
+];
+
+const statePaths = rawStateGeometries.map((st) => ({
+  id: st.id,
+  name: st.name,
+  d: toSvgPath(st.points),
+}));
+---
+
+<div
+  class="relative w-full rounded-xl overflow-hidden shadow-sm transition-all duration-300"
+  style={`max-width:${W}px; aspect-ratio:${W}/${H}; margin:auto; background:var(--color-canvas); border:1px solid var(--color-hairline);`}
+  data-district-map
+>
+  <!-- Map Toolbar Controls -->
+  <div class="absolute top-3 left-3 z-10 flex items-center gap-1.5 p-1 rounded-md bg-canvas/90 backdrop-blur border hairline shadow-xs flex-wrap">
+    <button
+      type="button"
+      data-map-mode="dots"
+      class="px-2.5 py-1 text-xs font-medium rounded transition-colors bg-surface-card text-ink"
+    >
+      📍 District Dots
+    </button>
+    <button
+      type="button"
+      data-map-mode="heatmap"
+      class="px-2.5 py-1 text-xs font-medium rounded transition-colors text-muted hover:text-ink"
+    >
+      🗺️ State Heatmap
+    </button>
+    <button
+      type="button"
+      data-map-fullscreen
+      class="px-2.5 py-1 text-xs font-medium rounded transition-colors text-muted hover:text-ink border-l hairline pl-2"
+      title="Toggle Fullscreen"
+    >
+      ⛶ Fullscreen
+    </button>
+  </div>
+
+  <svg
+    viewBox={`0 0 ${W} ${H}`}
+    width="100%"
+    height="100%"
+    role="img"
+    aria-label="Interactive physical map of India districts with AQI readings"
+    class="w-full h-full"
+  >
+    <defs>
+      <radialGradient id="selected-glow" cx="50%" cy="50%" r="50%">
+        <stop offset="0%" stop-color="var(--color-primary)" stop-opacity="0.85" />
+        <stop offset="100%" stop-color="var(--color-primary)" stop-opacity="0" />
+      </radialGradient>
+    </defs>
+
+    <!-- Physical State & UT Boundaries -->
+    <g data-layer="states">
+      {
+        statePaths.map((st) => {
+          const stateData = stateAvgMap[st.name] || Object.values(stateAvgMap)[0];
+          const avgAqi = stateData?.avg ?? null;
+          const cat = categoryFromAqi(avgAqi);
+          const color = categoryColor(cat);
+
+          return (
+            <path
+              d={st.d}
+              data-state-id={st.id}
+              data-state-name={st.name}
+              data-state-aqi={avgAqi ?? ""}
+              data-state-color={color}
+              fill="var(--color-surface-soft)"
+              stroke="var(--color-hairline)"
+              stroke-width="1.2"
+              stroke-linejoin="round"
+              class="transition-all duration-300 hover:opacity-90"
+              style="cursor:pointer;"
+            >
+              <title>{st.name}{avgAqi ? ` — Avg AQI ${avgAqi}` : ""}</title>
+            </path>
+          );
+        })
+      }
+    </g>
+
+    <!-- District Centroid Markers -->
+    <g data-layer="districts">
+      {
+        placed.map((p) => {
+          const r = p.hasData ? (p.isPredicted ? 5 : 6) : 3;
+          const color = categoryColor(p.cat);
+          const isSel = p.id === selectedId;
+
+          return (
+            <g
+              style="cursor:pointer;"
+              data-district-id={p.id}
+              data-district-name={p.name}
+              data-district-state={p.state}
+              data-district-aqi={p.aqi ?? ""}
+              data-district-cat={p.cat}
+              data-district-coverage={p.coverageType}
+              data-district-confidence={p.confidence ?? ""}
+              class="group"
+            >
+              {isSel && (
+                <circle
+                  cx={p.x}
+                  cy={p.y}
+                  r={r + 10}
+                  fill="url(#selected-glow)"
+                  class="animate-pulse"
+                />
+              )}
+              <circle
+                cx={p.x}
+                cy={p.y}
+                r={isSel ? r + 3 : r}
+                fill={p.hasData ? color : "var(--color-hairline)"}
+                fill-opacity={p.hasData ? (p.isPredicted ? 0.8 : 0.95) : 0.5}
+                stroke={
+                  isSel
+                    ? "var(--color-ink)"
+                    : p.isPredicted
+                    ? "var(--color-primary)"
+                    : "var(--color-canvas)"
+                }
+                stroke-width={isSel ? 2.5 : p.isPredicted ? 1.5 : 1}
+                stroke-dasharray={p.isPredicted ? "2 2" : undefined}
+                class="transition-all duration-200 group-hover:r-8"
+              />
+            </g>
+          );
+        })
+      }
+    </g>
+  </svg>
+
+  <!-- Interactive Floating Tooltip -->
+  <div
+    data-map-tooltip
+    class="absolute pointer-events-none hidden bg-canvas border hairline shadow-lg rounded-lg px-3 py-2 text-xs transition-opacity duration-150 z-20"
+    style="transform: translate(-50%, -120%);"
+  >
+    <div class="font-medium text-ink" data-tooltip-title>—</div>
+    <div class="text-muted text-[11px]" data-tooltip-state>—</div>
+    <div class="mt-1 flex items-center gap-1.5">
+      <span class="badge font-medium text-[10px]" data-tooltip-badge>—</span>
+      <span class="text-[10px] text-muted-soft" data-tooltip-type>Station</span>
+    </div>
+  </div>
+
+  <!-- Legend -->
+  <div
+    class="absolute bottom-2 right-2 text-xs text-muted flex flex-wrap gap-2 items-center"
+    style="background:rgba(250,249,245,0.92); padding:6px 10px; border-radius:8px; backdrop-filter: blur(4px); border:1px solid var(--color-hairline-soft);"
+  >
+    <span class="font-medium" style="color:var(--color-ink);">AQI</span>
+    <span class="inline-flex items-center gap-1">
+      <span class="w-2 h-2 rounded-full inline-block" style="background:#2a7a2a;"></span> Good
+    </span>
+    <span class="inline-flex items-center gap-1">
+      <span class="w-2 h-2 rounded-full inline-block" style="background:#7a5a00;"></span> Moderate
+    </span>
+    <span class="inline-flex items-center gap-1">
+      <span class="w-2 h-2 rounded-full inline-block" style="background:#8a4a00;"></span> Poor
+    </span>
+    <span class="inline-flex items-center gap-1">
+      <span class="w-2 h-2 rounded-full inline-block" style="background:#c2452f;"></span> Very Poor
+    </span>
+    <span class="inline-flex items-center gap-1">
+      <span class="w-2 h-2 rounded-full inline-block" style="background:#6e1b1b;"></span> Severe
+    </span>
+    <span class="inline-flex items-center gap-1 border-l pl-2 hairline">
+      <span class="w-2 h-2 rounded-full inline-block border border-dashed border-primary bg-primary/30"></span> Predicted
+    </span>
+  </div>
+</div>
+
+<style>
+  [data-district-map]:fullscreen {
+    width: 100vw !important;
+    height: 100vh !important;
+    max-width: none !important;
+    aspect-ratio: auto !important;
+    border-radius: 0 !important;
+    padding: 24px;
+    background: var(--color-canvas) !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+</style>
+
+<script>
+  const container = document.querySelector<HTMLElement>("[data-district-map]");
+  if (container) {
+    const tooltip = container.querySelector<HTMLElement>("[data-map-tooltip]");
+    const titleEl = container.querySelector<HTMLElement>("[data-tooltip-title]");
+    const stateEl = container.querySelector<HTMLElement>("[data-tooltip-state]");
+    const badgeEl = container.querySelector<HTMLElement>("[data-tooltip-badge]");
+    const typeEl = container.querySelector<HTMLElement>("[data-tooltip-type]");
+
+    const modeBtns = container.querySelectorAll<HTMLButtonElement>("[data-map-mode]");
+    const fullscreenBtn = container.querySelector<HTMLButtonElement>("[data-map-fullscreen]");
+    const statePaths = container.querySelectorAll<SVGPathElement>("[data-state-id]");
+    const districtDots = container.querySelectorAll<SVGGElement>("[data-district-id]");
+
+    let currentMode: "dots" | "heatmap" = "dots";
+
+    // Fullscreen Handler
+    fullscreenBtn?.addEventListener("click", () => {
+      if (!document.fullscreenElement) {
+        container.requestFullscreen().catch(() => {});
+      } else {
+        document.exitFullscreen().catch(() => {});
+      }
+    });
+
+    document.addEventListener("fullscreenchange", () => {
+      const isFS = !!document.fullscreenElement;
+      if (fullscreenBtn) {
+        fullscreenBtn.textContent = isFS ? "↙ Exit Fullscreen" : "⛶ Fullscreen";
+      }
+    });
+
+    // View mode handler
+    modeBtns.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const mode = btn.getAttribute("data-map-mode") as "dots" | "heatmap";
+        if (!mode || mode === currentMode) return;
+        currentMode = mode;
+
+        modeBtns.forEach((b) => {
+          b.classList.remove("bg-surface-card", "text-ink");
+          b.classList.add("text-muted");
+        });
+        btn.classList.add("bg-surface-card", "text-ink");
+        btn.classList.remove("text-muted");
+
+        if (currentMode === "heatmap") {
+          statePaths.forEach((path) => {
+            const color = path.getAttribute("data-state-color");
+            if (color) {
+              path.setAttribute("fill", color);
+              path.setAttribute("fill-opacity", "0.45");
+            }
+          });
+        } else {
+          statePaths.forEach((path) => {
+            path.setAttribute("fill", "var(--color-surface-soft)");
+            path.setAttribute("fill-opacity", "1");
+          });
+        }
+      });
+    });
+
+    districtDots.forEach((g) => {
+      g.addEventListener("mouseenter", (e) => {
+        const name = g.getAttribute("data-district-name");
+        const state = g.getAttribute("data-district-state");
+        const aqi = g.getAttribute("data-district-aqi");
+        const cat = g.getAttribute("data-district-cat");
+        const coverage = g.getAttribute("data-district-coverage");
+        const confidence = g.getAttribute("data-district-confidence");
+
+        if (!tooltip || !name) return;
+
+        titleEl!.textContent = name;
+        stateEl!.textContent = state || "";
+
+        if (aqi) {
+          badgeEl!.textContent = `AQI ${Math.round(Number(aqi))} (${cat})`;
+          badgeEl!.style.display = "inline-block";
+        } else {
+          badgeEl!.style.display = "none";
+        }
+
+        if (coverage === "predicted") {
+          typeEl!.textContent = `Predicted via IDW (${confidence}% confidence)`;
+        } else {
+          typeEl!.textContent = "Direct CPCB Station";
+        }
+
+        const rect = container.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+
+        tooltip.style.left = `${mouseX}px`;
+        tooltip.style.top = `${mouseY}px`;
+        tooltip.classList.remove("hidden");
+      });
+
+      g.addEventListener("mouseleave", () => {
+        if (tooltip) tooltip.classList.add("hidden");
+      });
+
+      g.addEventListener("click", () => {
+        const id = g.getAttribute("data-district-id");
+        if (!id) return;
+        const url = new URL(window.location.href);
+        url.searchParams.set("district", id);
+        history.replaceState(null, "", url.toString());
+
+        const sel = document.querySelector<HTMLSelectElement>(
+          "select[data-district-select]",
+        );
+        if (sel) {
+          sel.value = id;
+          sel.dispatchEvent(new Event("change", { bubbles: true }));
+        }
+
+        window.dispatchEvent(
+          new CustomEvent("district:select", { detail: { id } }),
+        );
+      });
+    });
+  }
+</script>

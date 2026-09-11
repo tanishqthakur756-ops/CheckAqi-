@@ -1,0 +1,105 @@
+---
+/**
+ * Major Pollutant Breakdown & Sensitive Group Precautions Component
+ *
+ * Displays 6 pollutant sub-indices (PM2.5, PM10, NO2, SO2, CO, O3) with concentration
+ * values, CPCB status badges, primary pollutant callout, and targeted health precautions.
+ */
+import { getPollutantBreakdown, getSensitiveGroupAdvice, categoryColor, categoryBg, categoryFromAqi } from "../lib/aqi";
+
+interface Props {
+  aqi: number | null;
+}
+
+const { aqi } = Astro.props as Props;
+const pollutants = getPollutantBreakdown(aqi);
+const cat = categoryFromAqi(aqi);
+const precautions = getSensitiveGroupAdvice(cat);
+---
+
+<div class="flex flex-col gap-6" data-pollutant-breakdown>
+  <!-- Pollutant Grid -->
+  <div>
+    <div class="flex items-baseline justify-between mb-4">
+      <div>
+        <h3 class="display-sm" style="font-size:22px;">Major Pollutants</h3>
+        <p class="text-sm text-muted">Sub-index concentration levels for key air pollutants</p>
+      </div>
+      <span class="badge badge-coral">
+        Primary: {pollutants.find((p) => p.isPrimary)?.code || "PM2.5"}
+      </span>
+    </div>
+
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      {
+        pollutants.map((p) => {
+          const color = categoryColor(p.cat);
+          const bg = categoryBg(p.cat);
+
+          return (
+            <div
+              class={`p-3.5 rounded-lg border transition-all ${
+                p.isPrimary ? "bg-surface-card border-primary/40 shadow-xs" : "bg-surface-soft border-hairline-soft"
+              }`}
+            >
+              <div class="flex items-center justify-between">
+                <span class="font-mono text-xs font-medium text-ink">{p.code}</span>
+                {p.isPrimary && (
+                  <span class="text-[9px] uppercase px-1 rounded bg-primary/10 text-primary font-medium">
+                    Main
+                  </span>
+                )}
+              </div>
+              <div class="display-md mt-1.5" style={`font-size:24px; color:${color}; line-height:1;`}>
+                {p.value}
+                <span class="text-[11px] font-sans font-normal text-muted ml-0.5">{p.unit}</span>
+              </div>
+              <div class="mt-2 flex items-center justify-between">
+                <span class="text-[10px] text-muted-soft">{p.name.split(" ")[0]}</span>
+                <span
+                  class="badge text-[9px] px-1.5 py-0"
+                  style={`color:${p.cat === "Very Poor" || p.cat === "Severe" ? "#fff" : color}; background:${bg};`}
+                >
+                  {p.cat}
+                </span>
+              </div>
+            </div>
+          );
+        })
+      }
+    </div>
+  </div>
+
+  <!-- Sensitive Group Precautions -->
+  <div class="pt-4 border-t hairline">
+    <h4 class="text-xs uppercase tracking-widest text-muted font-medium mb-3">
+      Health Precautions by Sensitive Group
+    </h4>
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      {
+        precautions.map((p) => (
+          <div class="p-3 rounded-lg bg-canvas border hairline flex gap-3 items-start">
+            <span class="text-xl leading-none">{p.icon}</span>
+            <div>
+              <div class="flex items-center justify-between gap-2">
+                <span class="text-xs font-medium text-ink">{p.group}</span>
+                <span
+                  class={`text-[9px] uppercase font-mono px-1.5 py-0.2 rounded ${
+                    p.riskLevel === "Critical"
+                      ? "bg-red-100 text-red-700 font-bold"
+                      : p.riskLevel === "High"
+                      ? "bg-amber-100 text-amber-800 font-medium"
+                      : "bg-emerald-100 text-emerald-800"
+                  }`}
+                >
+                  {p.riskLevel}
+                </span>
+              </div>
+              <p class="text-xs text-muted mt-1 leading-relaxed">{p.recommendation}</p>
+            </div>
+          </div>
+        ))
+      }
+    </div>
+  </div>
+</div>

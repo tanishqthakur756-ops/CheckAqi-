@@ -1,0 +1,23 @@
+---
+interface Props {
+  label: string;
+  value: string | number;
+  hint?: string;
+  tone?: "default" | "ink";
+}
+const { label, value, hint, tone = "default" } = Astro.props as Props;
+const valueColor = tone === "ink" ? "var(--color-ink)" : "var(--color-ink)";
+---
+
+<div class="flex flex-col gap-1">
+  <span
+    class="text-xs uppercase tracking-widest"
+    style="color: var(--color-muted); font-weight:500;"
+  >
+    {label}
+  </span>
+  <span class="display-sm" style={`color:${valueColor};`}>
+    {value}
+  </span>
+  {hint && <span class="text-sm text-muted">{hint}</span>}
+</div>
