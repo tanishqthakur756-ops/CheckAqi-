@@ -1,0 +1,66 @@
+---
+import { categoryFromAqi, categoryColor, categoryBg } from "../lib/aqi";
+import type { SeasonalPattern } from "../lib/types";
+
+interface Props {
+  data: SeasonalPattern | null;
+}
+const { data } = Astro.props as Props;
+const order = ["winter", "summer", "monsoon", "post_monsoon"] as const;
+const display: Record<string, string> = {
+  winter: "Winter",
+  summer: "Summer",
+  monsoon: "Monsoon",
+  post_monsoon: "Post-monsoon",
+};
+const desc: Record<string, string> = {
+  winter: "Dec – Feb",
+  summer: "Mar – May",
+  monsoon: "Jun – Sep",
+  post_monsoon: "Oct – Nov",
+};
+---
+
+<div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+  {
+    order.map((key) => {
+      const val = data?.[key] ?? null;
+      const cat = categoryFromAqi(val);
+      const color = categoryColor(cat);
+      const bg = categoryBg(cat);
+      return (
+        <div
+          class="flex flex-col gap-1 p-4 rounded-lg"
+          style="background:var(--color-surface-soft); border:1px solid var(--color-hairline-soft);"
+        >
+          <div
+            class="text-xs uppercase tracking-widest text-muted"
+            style="font-weight:500;"
+          >
+            {display[key]}
+          </div>
+          <div
+            class="text-xs text-muted-soft"
+            style="font-weight:400;"
+          >
+            {desc[key]}
+          </div>
+          <div
+            class="display-md mt-2"
+            style={`color:${color}; font-size:32px; line-height:1;`}
+          >
+            {val == null ? "—" : Math.round(val)}
+          </div>
+          <div class="mt-1">
+            <span
+              class="badge"
+              style={`color:${cat === "Very Poor" || cat === "Severe" ? "#fff" : color}; background:${bg}; font-size:10px;`}
+            >
+              {cat}
+            </span>
+          </div>
+        </div>
+      );
+    })
+  }
+</div>

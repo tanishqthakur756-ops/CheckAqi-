@@ -1,0 +1,29 @@
+---
+import Layout from "../layouts/Layout.astro";
+import Dashboard from "../components/Dashboard.astro";
+import { loadDistricts, loadSources } from "../lib/loaders";
+
+const districts = (await loadDistricts()).data;
+const sources = (await loadSources()).data;
+
+// Default to the first district with data, or fall back to the first.
+const sorted = [...districts].sort((a, b) => {
+  if (a.latest_aqi == null && b.latest_aqi == null) return 0;
+  if (a.latest_aqi == null) return 1;
+  if (b.latest_aqi == null) return -1;
+  return b.latest_aqi - a.latest_aqi;
+});
+const initial = sorted[0]?.district_id ?? districts[0]?.district_id ?? "dl_delhi";
+const sourceLabel = sources.map((s) => s.source_name).join(" + ") || "open data";
+---
+
+<Layout
+  title="Live dashboard"
+  description="A live, district-level air quality and weather dashboard for India. Select any district to see AQI, history, seasonal pattern and weather correlations."
+>
+  <Dashboard
+    districts={districts}
+    initialDistrictId={initial}
+    sourceLabel={sourceLabel}
+  />
+</Layout>

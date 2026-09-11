@@ -1,0 +1,100 @@
+---
+/**
+ * A small SVG-based bar correlation chart. We render this statically to
+ * keep zero client JS, but the bars are pure SVG so they stay crisp.
+ */
+import type { CorrelationResponse } from "../lib/types";
+
+interface Props {
+  data: CorrelationResponse | null;
+}
+const { data } = Astro.props as Props;
+
+function describe(r: number | null) {
+  if (r == null) return { strength: "no data", color: "var(--color-muted)" };
+  const abs = Math.abs(r);
+  let strength = "negligible";
+  if (abs >= 0.7) strength = "strong";
+  else if (abs >= 0.5) strength = "moderately strong";
+  else if (abs >= 0.3) strength = "moderate";
+  else if (abs >= 0.1) strength = "weak";
+  const direction = r < 0 ? "inverse" : "positive";
+  const color =
+    r < -0.3
+      ? "var(--color-accent-teal)"
+      : r > 0.3
+        ? "var(--color-primary)"
+        : "var(--color-muted)";
+  return { strength: `${strength} ${direction}`, color };
+}
+
+const wind = describe(data?.wind_correlation ?? null);
+const rain = describe(data?.rainfall_correlation ?? null);
+const items = [
+  {
+    label: "Wind speed",
+    sub: "Ventilation effect — higher wind usually disperses pollutants.",
+    value: data?.wind_correlation ?? null,
+    desc: wind,
+  },
+  {
+    label: "Rainfall",
+    sub: "Washout effect — rain physically scrubs PM from the air.",
+    value: data?.rainfall_correlation ?? null,
+    desc: rain,
+  },
+];
+---
+
+<div class="flex flex-col gap-5">
+  {
+    items.map((it) => {
+      const v = it.value;
+      const pct =
+        v == null ? 50 : Math.max(2, Math.min(98, 50 + v * 50));
+      const barColor = it.desc.color;
+      return (
+        <div>
+          <div class="flex items-baseline justify-between gap-3 flex-wrap">
+            <div>
+              <div
+                class="text-sm"
+                style="font-weight:500; color:var(--color-ink);"
+              >
+                {it.label}
+              </div>
+              <div class="text-xs text-muted mt-0.5">{it.sub}</div>
+            </div>
+            <div class="flex items-baseline gap-2">
+              <span
+                class="display-sm"
+                style={`font-size:22px; color:${barColor};`}
+              >
+                {v == null ? "—" : v.toFixed(2)}
+              </span>
+              <span
+                class="text-sm"
+                style={`color:${barColor}; font-weight:500;`}
+              >
+                {it.desc.strength}
+              </span>
+            </div>
+          </div>
+          <div
+            class="mt-2 h-2 rounded-pill overflow-hidden"
+            style="background:var(--color-hairline-soft);"
+            role="progressbar"
+            aria-valuemin={-1}
+            aria-valuemax={1}
+            aria-valuenow={v ?? 0}
+          >
+            <div
+              class="h-full rounded-pill"
+              style={`width:${pct}%; background:${barColor};`}
+            />
+          </div>
+        </div>
+      );
+    })
+  }
+</div>

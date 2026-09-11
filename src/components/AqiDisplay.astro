@@ -1,0 +1,45 @@
+---
+import { categoryFromAqi, categoryColor, categoryBg, type AqiCategory } from "../lib/aqi";
+
+interface Props {
+  aqi: number | null;
+  size?: "sm" | "md" | "lg";
+  showLabel?: boolean;
+}
+const { aqi, size = "md", showLabel = true } = Astro.props as Props;
+const cat: AqiCategory = categoryFromAqi(aqi);
+const fg = categoryColor(cat);
+const bg = categoryBg(cat);
+const sizeStyle =
+  size === "lg"
+    ? "font-size: 64px; line-height:1; letter-spacing:-0.04em;"
+    : size === "sm"
+      ? "font-size: 18px; line-height:1;"
+      : "font-size: 32px; line-height:1; letter-spacing:-0.02em;";
+const pillStyle =
+  size === "lg"
+    ? "padding:8px 16px; font-size:14px;"
+    : size === "sm"
+      ? "padding:3px 10px; font-size:11px;"
+      : "padding:6px 14px; font-size:12px;";
+---
+
+<div class="flex items-baseline gap-4 flex-wrap">
+  <span
+    class="display"
+    style={`${sizeStyle} color:${fg}; font-weight:400;`}
+    aria-label={`AQI ${aqi == null ? "unavailable" : Math.round(aqi)}`}
+  >
+    {aqi == null ? "—" : Math.round(aqi)}
+  </span>
+  {
+    showLabel && (
+      <span
+        class="badge"
+        style={`${pillStyle} color:${cat === "Very Poor" || cat === "Severe" ? "#fff" : fg}; background:${bg}; text-transform:uppercase; letter-spacing:0.08em; font-weight:500;`}
+      >
+        {cat}
+      </span>
+    )
+  }
+</div>

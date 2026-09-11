@@ -1,0 +1,190 @@
+---
+import Layout from "../layouts/Layout.astro";
+import { loadSources } from "../lib/loaders";
+
+const sources = (await loadSources()).data;
+---
+
+<Layout
+  title="Data sources"
+  description="Where the AQI and weather data come from, the API reference, and the methodology behind the dashboard."
+>
+  <section class="container-prose section-pad">
+    <div class="max-w-2xl">
+      <span class="badge badge-coral mb-3">Provenance</span>
+      <h1 class="display-lg">Data sources & API reference</h1>
+      <p class="text-body mt-4">
+        Everything you see on the dashboard is built from public, open
+        data. Below: where it comes from, when it was last synced, and
+        how to query the same data over the API.
+      </p>
+    </div>
+  </section>
+
+  <section class="container-prose" style="padding-bottom:64px;">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {
+        sources.map((s, i) => (
+          <article
+            class="card-canvas flex flex-col gap-3"
+            style={i === 0 ? "border-color: var(--color-primary);" : ""}
+          >
+            <div class="flex items-center justify-between">
+              <span class="badge" style="background:var(--color-surface-soft);">
+                {s.source_name}
+              </span>
+              <span
+                class="text-xs text-muted-soft"
+                style="font-family: var(--font-mono);"
+              >
+                {s.last_synced_at
+                  ? s.last_synced_at.slice(0, 10)
+                  : "—"}
+              </span>
+            </div>
+            <h2 class="display-sm" style="font-size:24px;">
+              {s.source_name}
+            </h2>
+            <p class="text-sm text-body">
+              {s.license_note ?? "License: see source website."}
+            </p>
+            <a
+              href={s.source_url ?? "#"}
+              class="btn btn-link mt-auto self-start"
+              rel="noopener"
+              target="_blank"
+            >
+              Visit source ↗
+            </a>
+          </article>
+        ))
+      }
+    </div>
+  </section>
+
+  <section
+    id="api"
+    class="bg-surface-dark text-on-dark"
+    style="padding-block:64px;"
+  >
+    <div class="container-prose">
+      <div class="max-w-2xl">
+        <span
+          class="badge badge-dark"
+          style="background:rgba(255,255,255,0.06); color:var(--color-on-dark-soft);"
+        >
+          API
+        </span>
+        <h2
+          class="display-lg mt-3"
+          style="color:var(--color-on-dark);"
+        >
+          The same data, over JSON.
+        </h2>
+        <p
+          class="mt-4"
+          style="color:var(--color-on-dark-soft); font-size:18px; line-height:1.6;"
+        >
+          Every panel on the dashboard is a thin wrapper over a small
+          set of endpoints. No keys, no rate limits — read what you need.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-10">
+        {
+          [
+            {
+              method: "GET",
+              path: "/api/districts/",
+              desc: "List all districts with their latest AQI.",
+            },
+            {
+              method: "GET",
+              path: "/api/districts/{id}",
+              desc: "District metadata and active station count.",
+            },
+            {
+              method: "GET",
+              path: "/api/districts/{id}/history?range=1y",
+              desc: "Daily rollups. Range is 30d, 90d, or 1y.",
+            },
+            {
+              method: "GET",
+              path: "/api/districts/{id}/correlation",
+              desc: "Seasonal averages + Pearson r with wind/rain.",
+            },
+            {
+              method: "GET",
+              path: "/api/sources/",
+              desc: "Metadata about every data provider.",
+            },
+            {
+              method: "GET",
+              path: "/health",
+              desc: "Liveness check. Returns {status: ok}.",
+            },
+          ].map((e) => (
+            <div
+              class="rounded-lg p-5"
+              style="background:var(--color-surface-dark-elevated); border:1px solid #2a2723;"
+            >
+              <div class="flex items-center gap-3">
+                <span
+                  class="badge"
+                  style="background:rgba(93,184,166,0.18); color:#5db8a6; font-family: var(--font-mono); font-size:11px;"
+                >
+                  {e.method}
+                </span>
+                <code
+                  style="font-family: var(--font-mono); color:var(--color-on-dark); font-size:13px;"
+                >
+                  {e.path}
+                </code>
+              </div>
+              <p
+                class="mt-3 text-sm"
+                style="color:var(--color-on-dark-soft);"
+              >
+                {e.desc}
+              </p>
+            </div>
+          ))
+        }
+      </div>
+
+      <div
+        class="mt-10 rounded-lg overflow-hidden"
+        style="background:var(--color-surface-dark-soft); border:1px solid #2a2723;"
+      >
+        <div
+          class="flex items-center justify-between gap-2 px-4 py-2"
+          style="background:var(--color-surface-dark-elevated); border-bottom:1px solid #2a2723;"
+        >
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full" style="background:#ff5f56;"></span>
+            <span class="w-2.5 h-2.5 rounded-full" style="background:#ffbd2e;"></span>
+            <span class="w-2.5 h-2.5 rounded-full" style="background:#27c93f;"></span>
+          </div>
+          <span
+            class="text-xs"
+            style="color:var(--color-on-dark-soft); font-family: var(--font-mono);"
+          >
+            curl
+          </span>
+          <span class="w-12"></span>
+        </div>
+        <pre
+          class="m-0 p-6 text-sm overflow-x-auto"
+          style="color:var(--color-on-dark); font-family: var(--font-mono); line-height:1.6; font-size:13px;"
+        ><code><span style="color:#a09d96;"># Today's AQI for every district</span>
+$ curl http://127.0.0.1:8000/api/districts/ | jq
+
+<span style="color:#a09d96;"># One year of history for New Delhi</span>
+$ curl http://127.0.0.1:8000/api/districts/dl_new/history?range=1y | jq
+
+<span style="color:#a09d96;"># Pearson r vs. wind and rain for Bengaluru</span>
+$ curl http://127.0.0.1:8000/api/districts/ka_bengaluru/correlation | jq</code></pre>
+      </div>
+    </div>
+  </section>
+</Layout>

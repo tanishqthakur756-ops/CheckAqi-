@@ -1,0 +1,160 @@
+---
+/**
+ * Lightweight India district map. We render an SVG of the country outline
+ * and plot circles at each district's centroid. This avoids any
+ * dependency on external tile servers and renders identically on the
+ * server. Clicking a circle selects the district; the parent <Dashboard>
+ * component wires this up.
+ */
+import type { DistrictListItem } from "../lib/types";
+import { categoryFromAqi, categoryColor } from "../lib/aqi";
+
+interface Props {
+  districts: DistrictListItem[];
+  selectedId?: string | null;
+  size?: number;
+}
+const { districts, selectedId = null, size = 720 } = Astro.props as Props;
+
+// India bounding box: lat 8..37, lon 68..97
+const minLat = 8;
+const maxLat = 37;
+const minLon = 68;
+const maxLon = 97;
+
+function project(lat: number, lon: number, w: number, h: number) {
+  const x = ((lon - minLon) / (maxLon - minLon)) * w;
+  const y = ((maxLat - lat) / (maxLat - minLat)) * h;
+  return { x, y };
+}
+
+const W = size;
+const H = Math.round(size * 1.18);
+const placed = districts
+  .filter((d) => d.latitude != null && d.longitude != null)
+  .map((d) => {
+    const { x, y } = project(d.latitude!, d.longitude!, W, H);
+    const cat = categoryFromAqi(d.latest_aqi);
+    return {
+      id: d.district_id,
+      name: d.name,
+      state: d.state,
+      aqi: d.latest_aqi,
+      cat,
+      x,
+      y,
+      hasData: d.latest_aqi != null,
+    };
+  });
+
+// Highly simplified India outline (visual only, not surveying accuracy)
+const indiaPath = `
+  M 90 80 L 130 60 L 180 50 L 230 55 L 290 50 L 340 60 L 380 80
+  L 420 90 L 470 110 L 510 140 L 540 170 L 560 200 L 555 240
+  L 540 280 L 520 320 L 500 360 L 470 410 L 440 460 L 410 500
+  L 380 540 L 350 570 L 310 600 L 270 615 L 230 605 L 200 580
+  L 180 540 L 165 500 L 150 460 L 140 420 L 130 380 L 120 340
+  L 110 300 L 100 260 L 95 220 L 90 180 L 85 140 L 90 100 Z
+`;
+---
+
+<div
+  class="relative w-full"
+  style={`max-width:${W}px; aspect-ratio:${W}/${H}; margin:auto;`}
+  data-district-map
+>
+  <svg
+    viewBox={`0 0 ${W} ${H}`}
+    width="100%"
+    height="100%"
+    role="img"
+    aria-label="Map of Indian districts with AQI"
+  >
+    <!-- India silhouette -->
+    <path
+      d={indiaPath}
+      fill="var(--color-surface-soft)"
+      stroke="var(--color-hairline)"
+      stroke-width="1.5"
+      stroke-linejoin="round"
+    />
+
+    <!-- districts -->
+    {
+      placed.map((p) => {
+        const r = p.hasData ? 6 : 3;
+        const color = categoryColor(p.cat);
+        const isSel = p.id === selectedId;
+        return (
+          <g style="cursor:pointer;" data-district-id={p.id}>
+            <circle
+              cx={p.x}
+              cy={p.y}
+              r={isSel ? r + 4 : r}
+              fill={p.hasData ? color : "var(--color-hairline)"}
+              fill-opacity={p.hasData ? 0.85 : 0.6}
+              stroke={isSel ? "var(--color-ink)" : "var(--color-canvas)"}
+              stroke-width={isSel ? 2.5 : 1.5}
+            />
+            <title>
+              {p.name}, {p.state}
+              {p.hasData
+                ? ` — AQI ${Math.round(p.aqi!)} (${p.cat})`
+                : " — no data"}
+            </title>
+          </g>
+        );
+      })
+    }
+  </svg>
+  <div
+    class="absolute bottom-2 right-2 text-xs text-muted flex flex-wrap gap-2 items-center"
+    style="background:rgba(250,249,245,0.85); padding:6px 10px; border-radius:8px; backdrop-filter: blur(4px);"
+  >
+    <span class="font-medium" style="color:var(--color-ink);">AQI</span>
+    <span class="inline-flex items-center gap-1">
+      <span class="w-2 h-2 rounded-full inline-block" style="background:#2a7a2a;"></span> Good
+    </span>
+    <span class="inline-flex items-center gap-1">
+      <span class="w-2 h-2 rounded-full inline-block" style="background:#7a5a00;"></span> Moderate
+    </span>
+    <span class="inline-flex items-center gap-1">
+      <span class="w-2 h-2 rounded-full inline-block" style="background:#8a4a00;"></span> Poor
+    </span>
+    <span class="inline-flex items-center gap-1">
+      <span class="w-2 h-2 rounded-full inline-block" style="background:#c2452f;"></span> Very Poor
+    </span>
+    <span class="inline-flex items-center gap-1">
+      <span class="w-2 h-2 rounded-full inline-block" style="background:#6e1b1b;"></span> Severe
+    </span>
+  </div>
+</div>
+
+<script>
+  // Wire up clicks → emit a custom event; the dashboard page listens.
+  document
+    .querySelectorAll<SVGGElement>("[data-district-map] g[data-district-id]")
+    .forEach((g) => {
+      g.addEventListener("click", () => {
+        const id = g.getAttribute("data-district-id");
+        if (!id) return;
+        const url = new URL(window.location.href);
+        url.searchParams.set("district", id);
+        history.replaceState(null, "", url.toString());
+        document
+          .querySelectorAll<HTMLOptionElement>(
+            'select[data-district-select] option',
+          )
+          .forEach((opt) => {
+            if (opt.value === id) opt.selected = true;
+          });
+        const sel = document.querySelector<HTMLSelectElement>(
+          "select[data-district-select]",
+        );
+        sel?.dispatchEvent(new Event("change", { bubbles: true }));
+        window.dispatchEvent(
+          new CustomEvent("district:select", { detail: { id } }),
+        );
+      });
+    });
+</script>
