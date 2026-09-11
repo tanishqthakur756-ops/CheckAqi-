@@ -1,46 +1,70 @@
-# Astro Starter Kit: Basics
+# India AQI Tracker 🌍
 
-```sh
-npm create astro@latest -- --template basics
+A comprehensive web application for tracking and analyzing Air Quality Index (AQI) data across Indian districts. Built with **Astro** frontend and **FastAPI** backend.
+
+> For detailed project information, see [README_PROJECT.md](README_PROJECT.md)
+
+## ✨ Quick Start
+
+### Frontend
+```bash
+npm install
+npm run dev        # Development server at localhost:4321
+npm run build      # Production build
+npm run preview    # Preview production build
 ```
 
-> 🧑‍🚀 **Seasoned astronaut?** Delete this file. Have fun!
-
-## 🚀 Project Structure
-
-Inside of your Astro project, you'll see the following folders and files:
-
-```text
-/
-├── public/
-│   └── favicon.svg
-├── src
-│   ├── assets
-│   │   └── astro.svg
-│   ├── components
-│   │   └── Welcome.astro
-│   ├── layouts
-│   │   └── Layout.astro
-│   └── pages
-│       └── index.astro
-└── package.json
+### Backend
+```bash
+cd backend
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .\.venv\Scripts\activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload
 ```
 
-To learn more about the folder structure of an Astro project, refer to [our guide on project structure](https://docs.astro.build/en/basics/project-structure/).
+## 📋 Documentation
 
-## 🧞 Commands
+- **[README_PROJECT.md](README_PROJECT.md)** - Complete project documentation
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** - How to contribute
+- **[DEPLOYMENT.md](DEPLOYMENT.md)** - Deployment guides
+- **[LICENSE](LICENSE)** - MIT License
+- **[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)** - Community guidelines
 
-All commands are run from the root of the project, from a terminal:
+## 🚀 Deploy to Netlify
 
-| Command                   | Action                                           |
-| :------------------------ | :----------------------------------------------- |
-| `npm install`             | Installs dependencies                            |
-| `npm run dev`             | Starts local dev server at `localhost:4321`      |
-| `npm run build`           | Build your production site to `./dist/`          |
-| `npm run preview`         | Preview your build locally, before deploying     |
-| `npm run astro ...`       | Run CLI commands like `astro add`, `astro check` |
-| `npm run astro -- --help` | Get help using the Astro CLI                     |
+The project is pre-configured for Netlify:
 
-## 👀 Want to learn more?
+1. Push to GitHub: `git push origin main`
+2. Connect to Netlify at [netlify.com](https://netlify.com)
+3. Configure build: `npm run build` → `dist`
+4. Site goes live! 🎉
 
-Feel free to check [our documentation](https://docs.astro.build) or jump into our [Discord server](https://astro.build/chat).
+See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed deployment options.
+
+## 🛠️ Tech Stack
+
+- **Frontend**: Astro 7.x + Tailwind CSS 4.x
+- **Backend**: FastAPI + SQLite/PostgreSQL
+- **Hosting**: Netlify (Frontend) + Railway/Render/AWS (Backend)
+
+## 📊 Features
+
+- Real-time AQI tracking across districts
+- District comparison tools
+- Historical data analysis
+- Forecasting & trends
+- Responsive design
+- Interactive visualizations
+
+## 🤝 Contributing
+
+We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+## 📄 License
+
+MIT License - see [LICENSE](LICENSE) file for details.
+
+---
+
+**Built with ❤️ by Tanish Thakur**

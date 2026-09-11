@@ -6,6 +6,7 @@ dist/
 
 # dependencies
 node_modules/
+backend/.venv/
 
 # logs
 npm-debug.log*
@@ -15,10 +16,50 @@ pnpm-debug.log*
 
 # environment variables
 .env
+.env.local
 .env.production
+.env.*.local
 
 # macOS-specific files
 .DS_Store
+.AppleDouble
+.LSOverride
 
 # jetbrains setting folder
 .idea/
+.vscode/
+*.swp
+*.swo
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# IDE
+.vscode/
+.idea/
+*.code-workspace
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Build/Dist
+dist/
+build/
+*.egg-info/
