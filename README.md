@@ -4,7 +4,7 @@ A comprehensive web application for tracking and analyzing Air Quality Index (AQ
 
 > For detailed project information, see [README_PROJECT.md](README_PROJECT.md)
 
-## ✨ Quick Start
+## Quick Start
 
 ### Frontend
 ```bash
@@ -23,7 +23,7 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
 
-## 📋 Documentation
+## Documentation
 
 - **[README_PROJECT.md](README_PROJECT.md)** - Complete project documentation
 - **[CONTRIBUTING.md](CONTRIBUTING.md)** - How to contribute
@@ -31,24 +31,24 @@ uvicorn app.main:app --reload
 - **[LICENSE](LICENSE)** - MIT License
 - **[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)** - Community guidelines
 
-## 🚀 Deploy to Netlify
+## Deploy to Netlify
 
 The project is pre-configured for Netlify:
 
 1. Push to GitHub: `git push origin main`
 2. Connect to Netlify at [netlify.com](https://netlify.com)
 3. Configure build: `npm run build` → `dist`
-4. Site goes live! 🎉
+4. Site goes live! 
 
 See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed deployment options.
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 - **Frontend**: Astro 7.x + Tailwind CSS 4.x
 - **Backend**: FastAPI + SQLite/PostgreSQL
 - **Hosting**: Netlify (Frontend) + Railway/Render/AWS (Backend)
 
-## 📊 Features
+## Features
 
 - Real-time AQI tracking across districts
 - District comparison tools
@@ -57,14 +57,14 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed deployment options.
 - Responsive design
 - Interactive visualizations
 
-## 🤝 Contributing
+## Contributing
 
 We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
-## 📄 License
+## License
 
 MIT License - see [LICENSE](LICENSE) file for details.
 
 ---
 
-**Built with ❤️ by Tanish Thakur**
+**Built by Tanishq Thakur**
